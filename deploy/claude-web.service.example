@@ -1,0 +1,18 @@
+# ~/.config/systemd/user/claude-web.service
+# Replace /home/you and the node path.
+[Unit]
+Description=Claude Code Web console
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/you/.local/share/claude-web
+EnvironmentFile=/home/you/.local/share/claude-web/data/claude-web.env
+ExecStart=/home/you/.nvm/versions/node/v22.0.0/bin/node /home/you/.local/share/claude-web/dist/server/index.js
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
