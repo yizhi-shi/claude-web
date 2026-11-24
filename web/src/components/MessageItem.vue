@@ -100,6 +100,14 @@ async function copyText(): Promise<void> {
         </template>
       </div>
       <div v-if="item.text" class="user-bubble-text">{{ item.text }}</div>
+      <div v-if="item.queued" class="user-msg-state queued">
+        <Icon name="clock" :size="12" />
+        <span>排队中，等待当前步骤结束</span>
+      </div>
+      <div v-else-if="item.failed" class="user-msg-state failed">
+        <Icon name="alert" :size="12" />
+        <span>未送达{{ item.failureReason ? `：${item.failureReason}` : '' }}</span>
+      </div>
     </div>
     <span class="msg-time">{{ formatClock(item.ts) }}</span>
   </div>

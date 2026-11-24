@@ -1988,6 +1988,23 @@ pre {
   white-space: pre-wrap;
 }
 
+.user-msg-state {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.user-msg-state.queued {
+  color: var(--muted);
+}
+
+.user-msg-state.failed {
+  color: var(--danger);
+}
+
 .user-attachments {
   display: flex;
   flex-wrap: wrap;

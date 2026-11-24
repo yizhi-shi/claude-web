@@ -124,6 +124,7 @@ const fileSuggestions = ref<string[]>([]);
 const menuLoading = ref(false);
 
 const builtinCommands: Array<{ name: string; description: string }> = [
+  { name: 'btw', description: '旁问：基于当前上下文提问，不打断主对话' },
   { name: 'clear', description: '清空当前上下文，开始新对话' },
   { name: 'compact', description: '压缩上下文，保留摘要' },
   { name: 'context', description: '查看当前上下文用量' },
@@ -503,9 +504,15 @@ async function load(): Promise<void> {
   stickToBottom.value = true;
   await loadConfig();
   try {
-    const result = await api.events(sessionId.value, 0, { limit: 240, tail: true });
+    const result = await api.events(sessionId.value, 0, {
+      limit: 240,
+      tail: true,
+      compact: true,
+    });
     events.value = result.events;
-    lastSeq.value = result.lastSeq;
+    // History omits token deltas. Attach from the last renderable event so the
+    // WS replay rebuilds any in-flight partial assistant text.
+    lastSeq.value = result.events.length > 0 ? result.events[result.events.length - 1].seq : 0;
     firstSeq.value = result.firstSeq;
     hasMoreEarlier.value = result.hasMore;
     state.value = result.state;
@@ -531,6 +538,7 @@ async function loadEarlier(): Promise<void> {
       before: firstSeq.value,
       limit: 200,
       tail: true,
+      compact: true,
     });
     const existing = new Set(events.value.map((event) => event.seq));
     const incoming = result.events.filter((event) => !existing.has(event.seq));
@@ -566,6 +574,14 @@ function onScroll(): void {
   const el = messagesEl.value;
   if (!el) return;
   stickToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+  if (
+    el.scrollTop < 80 &&
+    el.scrollHeight > el.clientHeight + 200 &&
+    hasMoreEarlier.value &&
+    !loadingEarlier.value
+  ) {
+    void loadEarlier();
+  }
 }
 
 function resizeComposer(): void {
@@ -739,7 +755,7 @@ function toggleSide(): void {
 }
 
 function askSide(): void {
-  const text = sideDraft.value.trim();
+  const text = sideDraft.value.trim().replace(/^\/btw(?:\s+|$)/, '').trim();
   if (!text || sideBusy.value) return;
   if (ws?.readyState !== WebSocket.OPEN) {
     toast('连接已断开，暂时无法旁问', 'error');
@@ -794,6 +810,25 @@ async function send(): Promise<void> {
   if (!canSend.value) return;
   const text = draft.value.trim();
   const attachmentIds = attachments.value.map((attachment) => attachment.id);
+
+  // `/btw` is a Web-side side question, not a CLI command. Route it to the
+  // panel instead of sending the literal text into the main conversation.
+  if (/^\/btw(?:\s|$)/.test(text)) {
+    if (attachmentIds.length > 0) {
+      toast('旁问暂不支持附件，请先移除附件', 'error');
+      return;
+    }
+    const question = text.replace(/^\/btw(?:\s+|$)/, '').trim();
+    draft.value = '';
+    await nextTick();
+    resizeComposer();
+    sideOpen.value = true;
+    sideDraft.value = question;
+    if (question) askSide();
+    else void nextTick(() => sideInputRef.value?.focus());
+    return;
+  }
+
   sending.value = true;
   closeMenu();
   try {

@@ -19,6 +19,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 - 页面只是“附着”到会话；断开 WebSocket 不会停止 Claude。
 - 重新打开页面会自动恢复运行状态、历史消息、待审批请求和后台任务。
 - 支持多项目、历史会话、工具审批、文件 diff、命令/技能、`@` 文件引用、图片/文件附件、旁问（/btw）和语音输入。
+- 历史按“可渲染事件”分页，滚到顶部自动加载更早消息；运行中追加的消息立即出现在对话里，并显示排队/送达状态。
 - 桌面与手机共用一套响应式布局，支持亮/暗主题。
 
 ---
@@ -34,6 +35,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 权限审批 | 危险命令需要人确认 | SDK `canUseTool` 回调把请求挂起并下发；前端展示命令或新旧文件 diff；返回 allow once / allow session / deny；超时自动拒绝 |
 | “全部允许”默认模式 | 个人可信环境不想每次点确认 | UI 选择 `bypassPermissions`；由于 CLI 禁止 root 使用 `--dangerously-skip-permissions`，服务端用 `default` 模式 + `canUseTool` 自动放行来等价实现（仍记录工具调用） |
 | 历史会话 / 续聊 | 复用终端或 VSCode 里已有的会话 | 扫描 `~/.claude/projects/*/*.jsonl`；把 Claude 原始 transcript 归一化为 Web 事件；用 `resume` 恢复同一 session；大历史只加载最近窗口，可“加载更早” |
+| 历史分页 / 排队消息 | 刷新后历史不能丢；排队发送要看得见 | 历史查询带 `compact=1`，过滤 token 级 `assistant.delta`，按消息级事件分页；滚到顶部自动加载更早。运行中发送的消息立即入 transcript，`user.message` 带 `queued`；回合边界发 `user.message.delivered`，停止时发 `user.message.failed`，输入区显示排队 chip |
 | 实时执行状态 | 知道现在在跑什么、跑了多久 | 从 `tool_use` / `tool_result` / `tool_progress` / task 事件维护活动工具列表；展示当前工具、耗时、后台子任务、上下文占用、费用和压缩状态 |
 | 工作区配置 | 会话应该跑在哪个目录 | 环境变量 `ALLOWED_ROOTS` + `data/workspaces.json` 的额外目录/默认目录；所有 cwd 做 realpath + 白名单校验；选择器可直接新建文件夹 |
 | 命令 / 技能 / 文件引用 | 对齐 VSCode 插件的输入能力 | 从 `system/init` 读取 `slash_commands` 与 `skills`；输入 `/` 弹出命令/技能菜单；输入 `@` 通过 `rg --files` 搜索当前项目文件并插入相对路径 |

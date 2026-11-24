@@ -25,6 +25,9 @@ export interface UserItem {
   id: string;
   text: string;
   attachments?: AttachmentRef[];
+  queued?: boolean;
+  failed?: boolean;
+  failureReason?: string;
   ts: number;
 }
 
@@ -65,6 +68,7 @@ function mergeBlocks(target: ContentBlock[], incoming: ContentBlock[]): void {
 export function buildChatItems(events: UiEvent[]): ChatItem[] {
   const items: ChatItem[] = [];
   const assistantByKey = new Map<string, AssistantItem>();
+  const userById = new Map<string, UserItem>();
   const toolResults = new Map<string, ToolResultInfo>();
   const seen = new Set<string>();
   let settledAt = 0;
@@ -92,14 +96,33 @@ export function buildChatItems(events: UiEvent[]): ChatItem[] {
       const key = `u:${event.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      items.push({
+      const item: UserItem = {
         kind: 'user',
         key,
         id: event.id,
         text: event.text,
         attachments: event.attachments,
+        queued: event.queued,
         ts: event.ts,
-      });
+      };
+      userById.set(event.id, item);
+      items.push(item);
+      continue;
+    }
+
+    if (event.type === 'user.message.delivered') {
+      const item = userById.get(event.id);
+      if (item) item.queued = false;
+      continue;
+    }
+
+    if (event.type === 'user.message.failed') {
+      const item = userById.get(event.id);
+      if (item) {
+        item.queued = false;
+        item.failed = true;
+        item.failureReason = event.reason;
+      }
       continue;
     }
 

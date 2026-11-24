@@ -144,12 +144,13 @@ export const api = {
   events: (
     id: string,
     after = 0,
-    options?: { before?: number; limit?: number; tail?: boolean },
+    options?: { before?: number; limit?: number; tail?: boolean; compact?: boolean },
   ) => {
     const params = new URLSearchParams({ after: String(after) });
     if (options?.before !== undefined) params.set('before', String(options.before));
     if (options?.limit !== undefined) params.set('limit', String(options.limit));
     if (options?.tail) params.set('tail', '1');
+    if (options?.compact) params.set('compact', '1');
     return request<EventsResponse>(
       `/api/sessions/${encodeURIComponent(id)}/events?${params.toString()}`,
     );

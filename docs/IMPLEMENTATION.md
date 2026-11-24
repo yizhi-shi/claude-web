@@ -141,6 +141,16 @@ GET /api/fs/search?cwd=<cwd>&q=<query>
 - 并发与清理：每会话最多 2 个旁问；socket 断开、重新 attach、会话 stop、服务 shutdown 都会取消；5 分钟超时。
 - 限制：fork 读取的是已落盘的 Claude transcript，主回合正在流式输出、尚未落盘的片段可能缺失；旁问历史只在浏览器内存中，刷新后不保留；旁问费用单独显示，不计入主会话 `costUsd`。
 
+### 历史分页、排队消息与运行中追加
+
+- 历史接口 `GET /api/sessions/:id/events` 新增 `compact=1`：`TranscriptStore.readWindow` 跳过 `assistant.delta`，只返回可渲染事件。一次长回答可能产生数千条 token 增量；过去按原始事件分页时，240 条窗口会被当前回合的 delta 占满，用户消息和更早历史因此“加载不出来”。
+- 首次载入使用 `compact=1&tail=1`；前端把 `lastSeq` 设为最后一条可渲染事件的 seq，再 attach WebSocket，服务端从该点回放 delta，正在流式输出的部分文本仍能重建。
+- 「加载更早」仍用 `before=firstSeq&compact=1`；聊天区滚动到距顶部 80px 且内容足够长时自动加载，按钮保留为兜底。加载后按高度差补偿滚动位置，避免视口跳动。
+- 发送时如果回合正在运行，`user.message` 事件带 `queued: true` 并立即写入 transcript/广播；前端在气泡内显示「排队中，等待当前步骤结束」。
+- SDK 会**立即预取**流式输入，所以“进入输入队列”不等于“模型已经看到”。服务端改为在每次 `turn.result` 时确认最早一条排队消息，发 `user.message.delivered`（FIFO）；会话 stop、进程结束或异常时对剩余消息发 `user.message.failed`。前端据此清除 chip 或显示「未送达」。
+- 模型在下一回合边界看到追加消息；无需 `priority` 也能追加进同一会话上下文，避免额外产生空回合。
+- `/btw` 在主输入框被前端拦截并转到旁问面板（不是 CLI 命令）；其他 `/命令` 和 Skill 仍按 CLI `system/init` 的 `slash_commands` 原样发送，`/context` 已做端到端验证。
+
 ## 3. 关闭页面为什么不停止后台
 
 这是架构红线：**WebSocket 连接只是订阅，不是任务宿主。**

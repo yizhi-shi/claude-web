@@ -277,7 +277,13 @@ export class SessionManager {
 
   eventsWindow(
     id: string,
-    options: { after?: number; before?: number; limit?: number; tail?: boolean },
+    options: {
+      after?: number;
+      before?: number;
+      limit?: number;
+      tail?: boolean;
+      compact?: boolean;
+    },
   ): UiEvent[] {
     return this.transcript.readWindow(id, options);
   }

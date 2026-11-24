@@ -78,7 +78,14 @@ export class TranscriptStore {
 
   readWindow(
     id: string,
-    options: { after?: number; before?: number; limit?: number; tail?: boolean },
+    options: {
+      after?: number;
+      before?: number;
+      limit?: number;
+      tail?: boolean;
+      /** Skip token-level streaming deltas; they are live-only for history. */
+      compact?: boolean;
+    },
   ): UiEvent[] {
     const after = options.after ?? 0;
     const before = options.before ?? Number.MAX_SAFE_INTEGER;
@@ -100,6 +107,9 @@ export class TranscriptStore {
       }
       if (!parsed || typeof parsed.seq !== 'number') continue;
       if (parsed.seq <= after || parsed.seq >= before) continue;
+      // A long answer emits thousands of deltas. History paginates renderable
+      // events, not tokens, or the newest turn fills every page by itself.
+      if (options.compact && parsed.type === 'assistant.delta') continue;
       out.push(parsed);
     }
     if (options.tail) return out.slice(-limit);

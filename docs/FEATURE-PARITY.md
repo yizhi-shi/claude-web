@@ -16,6 +16,8 @@
 | 权限审批 | ✅ | ✅ | 允许一次 / 本次会话 / 拒绝；超时拒绝 |
 | 权限模式切换 | ✅ | ✅ | default / acceptEdits / plan / auto / dontAsk / bypass |
 | 会话历史与续聊 | ✅ | ✅ | 扫描 `~/.claude/projects`，`resume` |
+| 历史分页 / 加载更早 | ✅ | ✅ | 消息级分页（`compact=1` 过滤 token delta）；滚到顶部自动加载，按钮兜底 |
+| 运行中追加消息 | ✅ | ✅ | 立即显示；`queued` → `delivered`/`failed`；模型在下一回合边界看到追加内容 |
 | 会话列表状态 | ✅ | ✅ | 运行中 / 等待审批 / 空闲 / 停止 / 异常 |
 | 后台任务/子代理状态 | ✅ | ✅ | task_started/progress/updated/notification |
 | 上下文用量 / 费用 | ✅ | ✅ | `getContextUsage` + `total_cost_usd` |
@@ -26,7 +28,7 @@
 | Plan mode | ✅ | 🟡 | 可选择 plan 模式；计划确认交互待专项验证 |
 | 交互式提问（AskUserQuestion） | ✅ | 🟡 | 工具可调用；当前 Web 端返回“未回答”，问答面板列为后续 |
 | 图片粘贴/附件 | ✅ | ✅ | 粘贴/拖拽/选择文件；图片走 image content block，小文本内联，其他文件按路径引用 |
-| 旁问（`/btw`） | ✅ | ✅ | 运行中基于当前上下文 fork 回答；禁工具、不写入主对话、不新增 Claude 会话文件 |
+| 旁问（`/btw`） | ✅ | ✅ | 顶栏入口或主输入框 `/btw` 均可打开可关闭的浮动面板；fork 上下文回答，禁工具、不写入主对话、不新增 Claude 会话文件 |
 | 检查点 / 回退 | ✅ | ⏳ | roadmap；SDK 有 rewind 控制面，需 UI |
 | 终端集成 | ✅ | ⏳ | 刻意不做；避免把控制台变成无结构终端 |
 | 文件树/编辑器 | ✅（部分版本） | ⏳ | 刻意后置；保持核心精简 |

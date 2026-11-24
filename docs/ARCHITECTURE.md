@@ -44,7 +44,7 @@ data/
 |---|---|
 | `server/src/runtime.ts` | 一个会话一个运行时：流式输入、消息归一化、`canUseTool`、任务/工具状态、空闲休眠 |
 | `server/src/manager.ts` | 运行时生命周期、会话导入、列表、状态合并、并发创建去重 |
-| `server/src/transcript.ts` | UI 事件持久化与窗口读取（`after` / `before` / `tail`） |
+| `server/src/transcript.ts` | UI 事件持久化与窗口读取（`after` / `before` / `tail` / `compact`） |
 | `server/src/attachments.ts` | 附件落盘/元数据、大小与类型校验、图片 base64 / 文本内联解析 |
 | `server/src/sideQuestion.ts` | 旁问：fork 当前会话、禁工具、不落盘的一次性查询 |
 | `server/src/importHistory.ts` | Claude 原始 transcript → Web UI 事件；按 messageId 合并 chunk |
@@ -70,7 +70,8 @@ data/
 UI 只消费稳定事件，不直接解析 SDK 原始消息：
 
 - `session.init` / `session.status` / `session.meta`
-- `user.message`
+- `user.message`（`queued` 表示发送时回合仍在运行）
+- `user.message.delivered` / `user.message.failed`（排队消息在回合边界确认或停止时失败）
 - `assistant.delta`（文本/思考增量） / `assistant.message`（final blocks）
 - `tool.result`
 - `permission.request` / `permission.resolved`
@@ -78,6 +79,8 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 - `notice`
 
 `assistant.message` 以 `messageId` 合并；历史导入按 messageId 合并 chunk 后标记 final，避免“已完成会话仍显示正在思考”。
+
+历史 HTTP 查询可用 `compact=1` 跳过 `assistant.delta`：实时 WS 仍需要增量，但分页按可渲染事件走，否则一次长回答的 token 增量会占满整个窗口。
 
 ## 权限模式
 

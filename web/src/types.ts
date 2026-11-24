@@ -119,7 +119,11 @@ export type UiEvent =
       id: string;
       text: string;
       attachments?: AttachmentRef[];
+      /** True when the message was sent while a turn was already running. */
+      queued?: boolean;
     })
+  | (EventBase & { type: 'user.message.delivered'; id: string })
+  | (EventBase & { type: 'user.message.failed'; id: string; reason?: string })
   | (EventBase & {
       type: 'assistant.message';
       messageId: string;

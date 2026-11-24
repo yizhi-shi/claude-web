@@ -181,6 +181,8 @@ export class ClaudeRuntime {
   private stopped = false;
   private inputClosed = false;
   private inputQueue: SDKUserMessage[] = [];
+  /** Event ids aligned with inputQueue, so the UI can clear its queued chip. */
+  private pendingInputIds: string[] = [];
   private inputWaiters: Array<(result: IteratorResult<SDKUserMessage>) => void> = [];
   private accumulators = new Map<string, MessageAccumulator>();
   private activeMessage = new Map<string, string>();
@@ -275,12 +277,14 @@ export class ClaudeRuntime {
         this.handleMessage(message as unknown as Record<string, unknown>);
       }
       if (!this.stopped) {
+        this.failPendingInputs('Claude Code 进程已结束');
         this.setStatus('stopped', 'Claude Code 进程已结束');
         this.emit({ type: 'session.status', status: 'stopped', detail: 'Claude Code 进程已结束' });
       }
     } catch (error) {
       if (this.stopped) return;
       const detail = errorMessage(error);
+      this.failPendingInputs(detail);
       this.setStatus('error', detail);
       this.emit({ type: 'notice', level: 'error', text: `会话异常：${detail}` });
       this.options2.onMeta({ lastError: detail });
@@ -304,11 +308,28 @@ export class ClaudeRuntime {
     return new Promise((resolve) => this.inputWaiters.push(resolve));
   }
 
-  private enqueue(message: SDKUserMessage): void {
+  private enqueue(message: SDKUserMessage, eventId?: string): void {
     if (this.inputClosed) return;
+    // The SDK pulls stream input eagerly, so "handed to the SDK" is not the
+    // same as "the model will see it". Keep the queued id until the next turn
+    // result confirms the turn boundary.
+    if (eventId) this.pendingInputIds.push(eventId);
     const waiter = this.inputWaiters.shift();
     if (waiter) waiter({ value: message, done: false });
     else this.inputQueue.push(message);
+  }
+
+  private markInputDelivered(): void {
+    const id = this.pendingInputIds.shift();
+    if (id) this.emit({ type: 'user.message.delivered', id });
+  }
+
+  private failPendingInputs(reason: string): void {
+    const ids = this.pendingInputIds.splice(0);
+    this.inputQueue.length = 0;
+    for (const id of ids) {
+      this.emit({ type: 'user.message.failed', id, reason });
+    }
   }
 
   subscribeEvents(fn: (event: UiEvent) => void): () => void {
@@ -416,19 +437,18 @@ export class ClaudeRuntime {
     if (!clean && attachments.length === 0) return;
     const refs: AttachmentRef[] = attachments.map((attachment) => attachment.ref);
     const wasRunning = this.status === 'running' || this.status === 'waiting_permission';
+    const eventId = randomId();
     this.clearIdleTimer();
     this.emit({
       type: 'user.message',
-      id: randomId(),
+      id: eventId,
       text: clean,
       ...(refs.length > 0 ? { attachments: refs } : {}),
+      ...(wasRunning ? { queued: true } : {}),
     });
     if (!this.title || this.title === '新会话') {
       this.title = truncate(clean || refs[0]?.name || '附件', 80);
       this.options2.onMeta({ title: this.title });
-    }
-    if (wasRunning) {
-      this.emit({ type: 'notice', level: 'info', text: '消息已排队，将在当前步骤结束后处理。' });
     }
     this.status = 'running';
     this.turnStartedAt = Date.now();
@@ -436,12 +456,15 @@ export class ClaudeRuntime {
     this.options2.onMeta({ status: 'running' });
     this.emit({ type: 'session.status', status: 'running' });
     this.notifyState(true);
-    this.enqueue({
-      type: 'user',
-      message: { role: 'user', content: buildUserContent(clean, attachments) },
-      parent_tool_use_id: null,
-      session_id: this.claudeSessionId ?? '',
-    } as SDKUserMessage);
+    this.enqueue(
+      {
+        type: 'user',
+        message: { role: 'user', content: buildUserContent(clean, attachments) },
+        parent_tool_use_id: null,
+        session_id: this.claudeSessionId ?? '',
+      } as SDKUserMessage,
+      eventId,
+    );
   }
 
   async interrupt(): Promise<void> {
@@ -920,6 +943,8 @@ export class ClaudeRuntime {
       }
       const subtypeResult = String(raw.subtype ?? 'success');
       const isError = subtypeResult !== 'success' || raw.is_error === true;
+      // One queued message is consumed at each turn boundary (FIFO).
+      this.markInputDelivered();
       this.emit({
         type: 'turn.result',
         subtype: subtypeResult,
@@ -1142,6 +1167,7 @@ export class ClaudeRuntime {
     if (this.stopped) return;
     this.stopped = true;
     this.inputClosed = true;
+    this.failPendingInputs(detail);
     this.clearIdleTimer();
     if (this.notifyTimer) clearTimeout(this.notifyTimer);
     this.abortController.abort();

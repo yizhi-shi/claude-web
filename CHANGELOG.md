@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-11-24
+
+- History pagination now works on renderable events instead of raw events: history queries use `compact=1`, which skips token-level `assistant.delta` records. A long answer no longer fills every history page by itself, so refresh and "load earlier" show the previous messages again.
+- Scrolling to the top of the chat now auto-loads earlier messages (the button remains as a fallback); the initial load attaches from the last renderable event so in-flight partial text is rebuilt over the WebSocket.
+- Messages sent while a turn is running are appended to the conversation immediately and rendered with a persistent "排队中，等待当前步骤结束" chip. The server emits `user.message.delivered` at the turn boundary (FIFO) and `user.message.failed` when the session stops, so the chip clears or turns into an explicit "未送达" state.
+- The model sees the appended message in the running conversation at the next turn boundary; the old transient "消息已排队" notice was removed.
+- `/btw` can now be typed into the main composer: it opens the side-question panel, does not go into the main conversation, and the panel still closes with its X. Other slash commands and skills continue through the CLI (`/context` verified end-to-end).
+- Public releases now preserve git history: this release is published as an incremental sanitized commit on top of the existing public history instead of a force-pushed mirror.
+- Added local smoke tests for compact history pagination, scroll-to-top loading, queued/delivered/failed states, the live queued chip in Chrome, `/btw` from the composer, and `/context` through the WebSocket input path.
+
 ## 0.4.0 — 2026-11-24
 
 - Side questions (`/btw`): a new 旁问 entry in the chat header opens a floating panel for one-off questions answered from the current conversation context. The main turn keeps running and is not interrupted.

@@ -417,6 +417,7 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
       before?: unknown;
       limit?: unknown;
       tail?: unknown;
+      compact?: unknown;
     };
     await manager.ensureTranscript(id);
     const after = intParam(query.after, 0, 0, Number.MAX_SAFE_INTEGER);
@@ -426,7 +427,8 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
         : intParam(query.before, Number.MAX_SAFE_INTEGER, 0, Number.MAX_SAFE_INTEGER);
     const limit = intParam(query.limit, config.maxEventsPerFetch, 1, config.maxEventsPerFetch);
     const tail = query.tail === '1' || query.tail === 'true';
-    const events = manager.eventsWindow(id, { after, before, limit, tail });
+    const compact = query.compact === '1' || query.compact === 'true';
+    const events = manager.eventsWindow(id, { after, before, limit, tail, compact });
     const lastSeq = manager.lastSeq(id);
     const firstSeq = events.length > 0 ? events[0].seq : after;
     const hasMore = events.length > 0 && firstSeq > after + 1;
