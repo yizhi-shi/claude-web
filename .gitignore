@@ -1,0 +1,12 @@
+node_modules/
+dist/
+web/dist/
+data/
+.env
+.env.local
+.smoke/
+*.log
+npm-debug.log*
+.DS_Store
+
+.local-secrets/
