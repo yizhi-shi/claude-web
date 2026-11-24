@@ -40,3 +40,4 @@ Include:
 - The Fastify request body limit is 18 MB; attachment limits should be kept below it after base64 expansion. Reverse proxies must set a compatible `client_max_body_size`.
 - Uploaded files are not virus-scanned and their content enters the model context; treat attachments as untrusted input.
 - Side questions run as a forked, non-persisted query with tools removed and every tool request denied; they do not write to the main transcript and are canceled when the requesting socket or session stops.
+- MCP status responses are allowlisted: server name/status/scope/source/server info/error/tool names and descriptions only. MCP `config`, `env`, HTTP headers, command paths and tokens are never sent to the browser. Enable/disable and reconnect act on the current SDK session only; the Web UI does not edit MCP config or agent/plugin files.

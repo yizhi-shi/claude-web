@@ -3,6 +3,7 @@ import type {
   AttachmentRef,
   ContextUsage,
   DirListing,
+  ExtensionsView,
   PermissionDecision,
   PermissionMode,
   ProjectSummary,
@@ -160,6 +161,18 @@ export const api = {
     request<{ contextUsage?: ContextUsage }>(
       `/api/sessions/${encodeURIComponent(id)}/context`,
     ),
+  extensions: (id: string) =>
+    request<ExtensionsView>(`/api/sessions/${encodeURIComponent(id)}/extensions`),
+  toggleMcp: (id: string, name: string, enabled: boolean) =>
+    request<ExtensionsView>(`/api/sessions/${encodeURIComponent(id)}/mcp/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ name, enabled }),
+    }),
+  reconnectMcp: (id: string, name: string) =>
+    request<ExtensionsView>(`/api/sessions/${encodeURIComponent(id)}/mcp/reconnect`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
   stopSession: (id: string) =>
     request<SessionRuntimeState>(`/api/sessions/${encodeURIComponent(id)}/stop`, {
       method: 'POST',

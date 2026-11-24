@@ -58,6 +58,38 @@ export interface ContextUsage {
   categories?: { id?: string; name: string; tokens: number }[];
 }
 
+export interface McpToolView {
+  name: string;
+  description?: string;
+  readOnly?: boolean;
+  destructive?: boolean;
+}
+
+export interface McpServerView {
+  name: string;
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled';
+  scope?: string;
+  source?: string;
+  serverName?: string;
+  serverVersion?: string;
+  error?: string;
+  tools: McpToolView[];
+}
+
+export interface AgentInfoView {
+  name: string;
+  description: string;
+  model?: string;
+}
+
+export interface ExtensionsView {
+  available: boolean;
+  mcpServers: McpServerView[];
+  agents: AgentInfoView[];
+  mcpError?: string;
+  agentsError?: string;
+}
+
 export interface SessionRuntimeState {
   id: string;
   claudeSessionId?: string;

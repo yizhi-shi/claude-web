@@ -445,6 +445,54 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     return { contextUsage };
   });
 
+  authed(app, 'GET', '/api/sessions/:id/extensions', async (req) => {
+    const { id } = req.params as { id: string };
+    await manager.ensureTranscript(id);
+    const runtime = manager.runtime(id);
+    if (!runtime) return { available: false, mcpServers: [], agents: [] };
+    return runtime.extensions();
+  });
+
+  authed(app, 'POST', '/api/sessions/:id/mcp/toggle', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const runtime = manager.runtime(id);
+    if (!runtime) {
+      return reply.code(409).send({ error: '会话未运行，无法管理 MCP 服务器' });
+    }
+    const body = req.body as { name?: unknown; enabled?: unknown } | undefined;
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 200 || typeof body?.enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'MCP 服务器名称或开关状态无效' });
+    }
+    try {
+      await runtime.toggleMcpServer(name, body.enabled);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+    audit('mcp.toggle', { id, name, enabled: body.enabled }, req.ip);
+    return runtime.extensions();
+  });
+
+  authed(app, 'POST', '/api/sessions/:id/mcp/reconnect', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const runtime = manager.runtime(id);
+    if (!runtime) {
+      return reply.code(409).send({ error: '会话未运行，无法重连 MCP 服务器' });
+    }
+    const body = req.body as { name?: unknown } | undefined;
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 200) {
+      return reply.code(400).send({ error: 'MCP 服务器名称无效' });
+    }
+    try {
+      await runtime.reconnectMcpServer(name);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+    audit('mcp.reconnect', { id, name }, req.ip);
+    return runtime.extensions();
+  });
+
   authed(app, 'POST', '/api/sessions/:id/attachments', async (req) => {
     const { id } = req.params as { id: string };
     await manager.ensureTranscript(id);

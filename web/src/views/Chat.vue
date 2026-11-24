@@ -13,6 +13,8 @@ import { buildChatItems } from '../chatModel';
 import { appConfig, loadConfig, refreshSessions, toast } from '../store';
 import type {
   AttachmentRef,
+  ExtensionsView,
+  McpServerView,
   PendingPermissionView,
   PendingPlanView,
   PendingQuestionView,
@@ -66,10 +68,14 @@ const settingsOpen = ref(false);
 const settingsModel = ref('');
 const modeBusy = ref(false);
 const modelBusy = ref(false);
-type SettingsTab = 'model' | 'permission' | 'info';
+type SettingsTab = 'model' | 'permission' | 'extensions' | 'info';
 const settingsTab = ref<SettingsTab>('model');
 const contextRefreshing = ref(false);
 const helpOpen = ref(false);
+const extensionsView = ref<ExtensionsView | null>(null);
+const extensionsLoading = ref(false);
+const extensionsError = ref('');
+const mcpBusy = ref('');
 const stopping = ref(false);
 const stopSlow = ref(false);
 let stopSlowTimer: number | undefined;
@@ -275,9 +281,12 @@ const webCommands: WebCommandInfo[] = [
   { name: 'status', usage: '/status', description: '查看会话状态与运行信息' },
   { name: 'permissions', usage: '/permissions', description: '切换权限模式' },
   { name: 'config', usage: '/config', description: '打开 Web 会话设置' },
+  { name: 'mcp', usage: '/mcp', description: '查看 MCP 服务器状态、重连、启停' },
+  { name: 'agents', usage: '/agents', description: '查看当前可用的子代理' },
   { name: 'help', usage: '/help', description: '查看 Web 命令帮助' },
 ];
 const webCommandNames = new Set(webCommands.map((command) => command.name));
+const webCommandAliases = new Set(['list-agents']);
 const modelPresets = [
   { value: 'default', label: '默认', hint: 'CLI 默认模型' },
   { value: 'best', label: 'Best', hint: '最佳可用模型' },
@@ -293,6 +302,7 @@ const modelPresets = [
 const settingsTabs: Array<{ value: SettingsTab; label: string }> = [
   { value: 'model', label: '模型' },
   { value: 'permission', label: '权限' },
+  { value: 'extensions', label: '扩展' },
   { value: 'info', label: '状态' },
 ];
 
@@ -306,6 +316,9 @@ const builtinCommands: Array<{ name: string; description: string }> = [
   { name: 'permissions', description: '切换权限模式（Web 面板）' },
   { name: 'status', description: '查看会话状态（Web 面板）' },
   { name: 'config', description: '打开会话设置（Web 面板）' },
+  { name: 'mcp', description: 'MCP 服务器状态与启停（Web 面板）' },
+  { name: 'agents', description: '查看可用子代理（Web 面板）' },
+  { name: 'list-agents', description: '查看可用子代理（Web 面板）' },
   { name: 'help', description: '查看 Web 命令帮助' },
   { name: 'init', description: '为项目生成 CLAUDE.md' },
   { name: 'review', description: '审查当前改动' },
@@ -731,6 +744,8 @@ async function load(): Promise<void> {
   resolvedRequests.clear();
   resolvedQuestions.clear();
   resolvedPlans.clear();
+  extensionsView.value = null;
+  extensionsError.value = '';
   stickToBottom.value = true;
   await loadConfig();
   try {
@@ -1240,6 +1255,7 @@ function openSessionPanel(tab: SettingsTab = settingsTab.value): void {
   if (!settingsOpen.value) settingsModel.value = state.value?.model ?? '';
   settingsOpen.value = true;
   if (tab === 'info') void refreshContextNow();
+  if (tab === 'extensions') void loadExtensions();
 }
 
 function toggleSessionSettings(): void {
@@ -1250,6 +1266,7 @@ function toggleSessionSettings(): void {
 function selectSettingsTab(tab: SettingsTab): void {
   settingsTab.value = tab;
   if (tab === 'info') void refreshContextNow();
+  if (tab === 'extensions') void loadExtensions();
 }
 
 async function refreshContextNow(): Promise<void> {
@@ -1264,6 +1281,82 @@ async function refreshContextNow(): Promise<void> {
     toast(err instanceof ApiError ? err.message : '读取上下文用量失败', 'error');
   } finally {
     contextRefreshing.value = false;
+  }
+}
+
+async function loadExtensions(): Promise<void> {
+  if (extensionsLoading.value) return;
+  const target = sessionId.value;
+  extensionsLoading.value = true;
+  extensionsError.value = '';
+  try {
+    const view = await api.extensions(target);
+    if (sessionId.value === target) extensionsView.value = view;
+  } catch (err) {
+    if (sessionId.value === target) {
+      extensionsError.value = err instanceof ApiError ? err.message : '读取扩展失败';
+    }
+  } finally {
+    extensionsLoading.value = false;
+  }
+}
+
+function refreshExtensions(): void {
+  void loadExtensions();
+}
+
+function mcpStatusLabel(status: McpServerView['status']): string {
+  return (
+    {
+      connected: '已连接',
+      failed: '失败',
+      'needs-auth': '需要认证',
+      pending: '连接中',
+      disabled: '已停用',
+    }[status] ?? status
+  );
+}
+
+function mcpTone(status: McpServerView['status']): string {
+  if (status === 'connected') return 'on';
+  if (status === 'failed') return 'error';
+  if (status === 'needs-auth') return 'warn';
+  if (status === 'pending') return 'busy';
+  return 'off';
+}
+
+function mcpToolsPreview(server: McpServerView): string {
+  return server.tools.slice(0, 4).map((tool) => tool.name).join('、');
+}
+
+function mcpToolsTitle(server: McpServerView): string {
+  return server.tools.map((tool) => tool.name).join('\n');
+}
+
+async function toggleMcp(server: McpServerView): Promise<void> {
+  if (mcpBusy.value) return;
+  const enabled = server.status === 'disabled';
+  mcpBusy.value = server.name;
+  try {
+    extensionsView.value = await api.toggleMcp(sessionId.value, server.name, enabled);
+    toast(`已${enabled ? '启用' : '停用'} MCP：${server.name}`, 'success');
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : '切换 MCP 失败', 'error');
+  } finally {
+    mcpBusy.value = '';
+  }
+}
+
+async function reconnectMcp(server: McpServerView): Promise<void> {
+  if (mcpBusy.value) return;
+  mcpBusy.value = server.name;
+  try {
+    extensionsView.value = await api.reconnectMcp(sessionId.value, server.name);
+    toast(`已请求重连 MCP：${server.name}`, 'success');
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : '重连 MCP 失败', 'error');
+  } finally {
+    mcpBusy.value = '';
   }
 }
 
@@ -1309,7 +1402,7 @@ function handleWebCommand(text: string): boolean {
   if (!match) return false;
   const name = match[1].toLowerCase();
   const arg = (match[2] ?? '').trim();
-  if (!webCommandNames.has(name)) return false;
+  if (!webCommandNames.has(name) && !webCommandAliases.has(name)) return false;
 
   if (attachments.value.length > 0) {
     toast('该命令不支持附件，请先移除附件', 'error');
@@ -1337,6 +1430,14 @@ function handleWebCommand(text: string): boolean {
     case 'config':
       openSessionPanel('model');
       toast('Web 端可配置模型、权限与会话状态；其他 CLI 配置请使用设置页或终端', 'info', 3600);
+      break;
+    case 'mcp':
+    case 'agents':
+    case 'list-agents':
+      openSessionPanel('extensions');
+      if (arg) {
+        toast('Web 面板用于查看/重连/启停；添加、认证等子命令请在终端执行', 'info', 3600);
+      }
       break;
     case 'help':
       settingsOpen.value = false;
@@ -1613,6 +1714,10 @@ watch(
     sideDraft.value = '';
     sideBusy.value = false;
     sideExchanges.value = [];
+    settingsOpen.value = false;
+    helpOpen.value = false;
+    extensionsView.value = null;
+    extensionsError.value = '';
     if (route.name === 'chat') void reload();
   },
 );
@@ -2134,7 +2239,91 @@ onUnmounted(() => {
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="settingsTab === 'extensions'">
+          <div class="ext-title">
+            <span class="mini-label">MCP 服务器</span>
+            <button class="mini-link" :disabled="extensionsLoading" @click="refreshExtensions">
+              <span v-if="extensionsLoading" class="spinner tiny" />
+              {{ extensionsLoading ? '读取中…' : '刷新' }}
+            </button>
+          </div>
+          <p v-if="extensionsError" class="ext-error">{{ extensionsError }}</p>
+          <template v-if="extensionsView?.available">
+            <div v-if="extensionsView.mcpError" class="ext-error">{{ extensionsView.mcpError }}</div>
+            <div v-if="extensionsView.mcpServers.length" class="mcp-list">
+              <div v-for="server in extensionsView.mcpServers" :key="server.name" class="mcp-item">
+                <div class="mcp-row">
+                  <span class="status-dot" :class="mcpTone(server.status)" />
+                  <span class="mcp-name" :title="server.name">{{ server.name }}</span>
+                  <span class="mcp-status">{{ mcpStatusLabel(server.status) }}</span>
+                  <span v-if="server.scope || server.source" class="mcp-scope">{{ server.scope || server.source }}</span>
+                </div>
+                <div class="mcp-meta">
+                  <span v-if="server.serverName">
+                    {{ server.serverName }}<template v-if="server.serverVersion"> {{ server.serverVersion }}</template>
+                  </span>
+                  <span>{{ server.tools.length }} 个工具</span>
+                </div>
+                <div v-if="server.tools.length" class="mcp-tools" :title="mcpToolsTitle(server)">
+                  {{ mcpToolsPreview(server) }}
+                  <span v-if="server.tools.length > 4">等 {{ server.tools.length }} 个</span>
+                </div>
+                <div v-if="server.status === 'needs-auth'" class="mcp-warn">
+                  需要认证：请在终端运行 /mcp 完成登录
+                </div>
+                <div v-if="server.error" class="mcp-error" :title="server.error">{{ server.error }}</div>
+                <div class="mcp-actions">
+                  <span v-if="mcpBusy === server.name" class="spinner tiny" />
+                  <button
+                    v-if="server.status !== 'disabled'"
+                    class="mini-action"
+                    :disabled="mcpBusy === server.name"
+                    @click="reconnectMcp(server)"
+                  >
+                    重连
+                  </button>
+                  <button
+                    class="mini-action"
+                    :disabled="mcpBusy === server.name"
+                    @click="toggleMcp(server)"
+                  >
+                    {{ server.status === 'disabled' ? '启用' : '停用' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="popover-note">
+              当前会话没有 MCP 服务器。可在 ~/.claude.json、项目 .mcp.json 或插件中配置后重新打开会话。
+            </p>
+
+            <div class="popover-sep" />
+            <div class="ext-title"><span class="mini-label">子代理</span></div>
+            <div v-if="extensionsView.agentsError" class="ext-error">{{ extensionsView.agentsError }}</div>
+            <div v-if="extensionsView.agents.length" class="agent-list">
+              <div v-for="agent in extensionsView.agents" :key="agent.name" class="agent-item">
+                <div class="agent-row">
+                  <span class="agent-name">{{ agent.name }}</span>
+                  <span v-if="agent.model" class="agent-model">{{ agent.model }}</span>
+                </div>
+                <p v-if="agent.description" class="agent-desc">{{ agent.description }}</p>
+              </div>
+            </div>
+            <p v-else class="popover-note">没有可用的子代理列表。</p>
+            <p class="popover-note">
+              子代理在项目 <code>.claude/agents</code> 或 <code>~/.claude/agents</code>
+              中定义；Web 端只读展示。
+            </p>
+            <div class="popover-sep" />
+            <p class="popover-note">
+              插件市场、hooks 与 MCP 认证仍由 Claude Code CLI 管理；Web 端不会修改配置文件。
+            </p>
+          </template>
+          <p v-else-if="!extensionsLoading" class="popover-note">
+            会话尚未运行，发送一条消息或重新打开页面后再查看扩展。
+          </p>
+        </template>
+
+        <template v-else-if="settingsTab === 'info'">
           <div class="popover-info-list">
             <div class="popover-meta">
               <span>状态</span>

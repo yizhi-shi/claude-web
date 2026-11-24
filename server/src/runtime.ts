@@ -10,9 +10,13 @@ import type { ResolvedAttachment } from './attachments.js';
 import { config, childEnv } from './config.js';
 import { TranscriptStore } from './transcript.js';
 import type {
+  AgentInfoView,
   AttachmentRef,
   ContentBlock,
   ContextUsage,
+  ExtensionsView,
+  McpServerView,
+  McpToolView,
   PermissionMode,
   PendingPermissionView,
   PendingPlanView,
@@ -225,6 +229,67 @@ export function buildUserContent(
   }
 
   return blocks as unknown as SDKUserMessage['message']['content'];
+}
+
+function safeText(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  return text ? text.slice(0, max) : undefined;
+}
+
+const MCP_STATUSES = new Set(['connected', 'failed', 'needs-auth', 'pending', 'disabled']);
+
+/** Never expose MCP config/env/headers; only safe status metadata. */
+function mapMcpStatus(value: unknown): McpServerView | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const name = safeText(raw.name, 200);
+  if (!name) return null;
+  const rawStatus = safeText(raw.status, 40) ?? '';
+  const status = (MCP_STATUSES.has(rawStatus) ? rawStatus : 'pending') as McpServerView['status'];
+  const info = raw.serverInfo && typeof raw.serverInfo === 'object'
+    ? (raw.serverInfo as Record<string, unknown>)
+    : undefined;
+  const tools: McpToolView[] = [];
+  if (Array.isArray(raw.tools)) {
+    for (const item of raw.tools.slice(0, 200)) {
+      if (!item || typeof item !== 'object') continue;
+      const tool = item as Record<string, unknown>;
+      const toolName = safeText(tool.name, 200);
+      if (!toolName) continue;
+      const annotations = tool.annotations && typeof tool.annotations === 'object'
+        ? (tool.annotations as Record<string, unknown>)
+        : undefined;
+      tools.push({
+        name: toolName,
+        ...(safeText(tool.description, 300) ? { description: safeText(tool.description, 300) } : {}),
+        ...(annotations?.readOnly === true ? { readOnly: true } : {}),
+        ...(annotations?.destructive === true ? { destructive: true } : {}),
+      });
+    }
+  }
+  return {
+    name,
+    status,
+    ...(safeText(raw.scope, 80) ? { scope: safeText(raw.scope, 80) } : {}),
+    ...(safeText(raw.source, 80) ? { source: safeText(raw.source, 80) } : {}),
+    ...(safeText(info?.name, 120) ? { serverName: safeText(info?.name, 120) } : {}),
+    ...(safeText(info?.version, 80) ? { serverVersion: safeText(info?.version, 80) } : {}),
+    ...(safeText(raw.error, 500) ? { error: safeText(raw.error, 500) } : {}),
+    tools,
+  };
+}
+
+function mapAgentInfo(value: unknown): AgentInfoView | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const name = safeText(raw.name, 120);
+  if (!name) return null;
+  return {
+    name,
+    description: safeText(raw.description, 500) ?? '',
+    ...(safeText(raw.model, 120) ? { model: safeText(raw.model, 120) } : {}),
+  };
 }
 
 export class ClaudeRuntime {
@@ -1465,6 +1530,66 @@ export class ClaudeRuntime {
       // context usage is best-effort
     }
     return this.contextUsage;
+  }
+
+  /**
+   * Safe session extension view: MCP status and agents only. MCP config
+   * (env, headers, URLs) is deliberately not copied to the Web client.
+   */
+  async extensions(): Promise<ExtensionsView> {
+    const q = this.q;
+    if (!q || this.stopped) {
+      return { available: false, mcpServers: [], agents: [] };
+    }
+    const [mcpResult, agentResult] = await Promise.allSettled([
+      q.mcpServerStatus(),
+      q.supportedAgents(),
+    ]);
+    const mcpServers: McpServerView[] = [];
+    let mcpError: string | undefined;
+    if (mcpResult.status === 'fulfilled') {
+      for (const row of mcpResult.value) {
+        const view = mapMcpStatus(row);
+        if (view) mcpServers.push(view);
+      }
+      mcpServers.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      mcpError = errorMessage(mcpResult.reason).slice(0, 500);
+    }
+    const agents: AgentInfoView[] = [];
+    let agentsError: string | undefined;
+    if (agentResult.status === 'fulfilled') {
+      for (const row of agentResult.value) {
+        const view = mapAgentInfo(row);
+        if (view) agents.push(view);
+      }
+      agents.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      agentsError = errorMessage(agentResult.reason).slice(0, 500);
+    }
+    return {
+      available: true,
+      mcpServers,
+      agents,
+      ...(mcpError ? { mcpError } : {}),
+      ...(agentsError ? { agentsError } : {}),
+    };
+  }
+
+  async toggleMcpServer(name: string, enabled: boolean): Promise<void> {
+    const q = this.q;
+    if (!q || this.stopped) throw new Error('会话未运行，无法管理 MCP 服务器');
+    const server = name.trim();
+    if (!server || server.length > 200) throw new Error('MCP 服务器名称无效');
+    await q.toggleMcpServer(server, enabled);
+  }
+
+  async reconnectMcpServer(name: string): Promise<void> {
+    const q = this.q;
+    if (!q || this.stopped) throw new Error('会话未运行，无法重连 MCP 服务器');
+    const server = name.trim();
+    if (!server || server.length > 200) throw new Error('MCP 服务器名称无效');
+    await q.reconnectMcpServer(server);
   }
 
   async stop(detail = '已停止'): Promise<void> {

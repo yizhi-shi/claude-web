@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-11-24
+
+- Added a native “Extensions” tab for the current session: MCP server status, scope/source, server info, tools, errors, reconnect, and session-scoped enable/disable; subagents are shown read-only with their descriptions and models.
+- Added `GET /api/sessions/:id/extensions`, `POST /api/sessions/:id/mcp/toggle` and `POST /api/sessions/:id/mcp/reconnect`, backed by the Agent SDK's `mcpServerStatus()`, `toggleMcpServer()`, `reconnectMcpServer()` and `supportedAgents()`.
+- MCP responses expose only safe metadata; config/env/headers/command paths/tokens are never sent to the browser. Enabling/disabling only affects the current runtime and does not edit config files.
+- `/mcp`, `/agents` and `/list-agents` open the native Extensions tab; `/reload-plugins` and `/doctor` remain CLI commands, with synthetic output rendered as system notices.
+- Deliberately skipped plugin marketplace/install, hooks editing, and MCP add/edit/auth in Web: they are supply-chain/security-sensitive, interactive in the CLI, or lack safe SDK APIs. The rationale and decision matrix are in `docs/EXTENSIONS.md`.
+- Added an isolated smoke test with a temporary HOME and a real stdio MCP server (`echo`): status/tools, no path leakage, toggle, reconnect, and the Chrome Extensions panel all pass.
+
 ## 0.8.1 — 2026-11-24
 
 - Web-native system/config slash commands: `/model` opens a model panel (current model, sonnet/opus/haiku/fable/best/1M/opusplan presets, custom ID), `/model <name>` switches directly, `/model default` clears the override; `/context`, `/usage`, `/status`, `/permissions`, `/config` and `/help` open native panels instead of sending synthetic CLI text into the conversation.

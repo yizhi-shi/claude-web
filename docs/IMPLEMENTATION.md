@@ -142,6 +142,16 @@ GET /api/fs/search?cwd=<cwd>&q=<query>
 
 CLI 对未拦截命令返回的 assistant 消息可能带 `model: "<synthetic>"`（例如 `/context` 的旧输出或 `No response requested.`）。`MessageItem.vue` 把这类消息渲染为「系统」通知，隐藏 `<synthetic>` 模型 chip，并隐藏空文本/`No response requested.`，避免系统输出伪装成 Claude 回复。
 
+### 扩展：MCP / 子代理
+
+会话设置新增「扩展」tab，对应 `/mcp`、`/agents`、`/list-agents`。详细取舍见 [扩展管理范围](EXTENSIONS.md)。
+
+- `GET /api/sessions/:id/extensions` → `ClaudeRuntime.extensions()`：并发调用 SDK 的 `mcpServerStatus()` 与 `supportedAgents()`，一个失败不影响另一个。
+- MCP 只映射安全字段：`name/status/scope/source/serverInfo/error/tools`；**不返回 `config`、env、HTTP headers、命令路径或 token**。
+- `POST /api/sessions/:id/mcp/toggle` → `q.toggleMcpServer(name, enabled)`；`POST /mcp/reconnect` → `q.reconnectMcpServer(name)`。只作用于当前会话，不写配置文件。
+- 前端扩展 tab 显示状态点、工具数/工具名、错误、重连/启停按钮；`needs-auth` 提示去终端 `/mcp` 认证。
+- 子代理只读列出名称、模型、描述；创建/编辑仍在 `.claude/agents/` 或 `~/.claude/agents/`。插件市场、hooks、`/reload-plugins` 不进入 Web。
+
 ### 附件与图片
 
 > 完整的请求/响应、content block、存储与安全边界见 [附件链路](ATTACHMENTS.md)。本节只保留实现摘要。

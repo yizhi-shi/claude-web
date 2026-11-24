@@ -95,11 +95,12 @@
 
 ## Web 原生命令与会话设置（2026-11-24 优化）
 
-- 会话设置 popover 改为三个 tab：**模型 / 权限 / 状态**。模型 tab 提供当前模型、常用别名（sonnet/opus/haiku/fable/best/1M 变体/opusplan）和自定义模型 ID；权限 tab 是原来的权限模式列表；状态 tab 展示模型、权限、目录、会话 ID、CLI、费用、活动工具和上下文分类用量。
-- `/model` 直接打开模型 tab，`/model <name>` 直接切换，`/model default` 恢复默认；`/context`、`/usage`、`/status` 打开状态 tab，`/permissions` 打开权限 tab，`/config` 打开设置，`/help` 打开 Web 命令帮助。
+- 会话设置 popover 改为四个 tab：**模型 / 权限 / 扩展 / 状态**。模型 tab 提供当前模型、常用别名（sonnet/opus/haiku/fable/best/1M 变体/opusplan）和自定义模型 ID；权限 tab 是原来的权限模式列表；扩展 tab 展示当前会话 MCP 服务器状态/工具/错误（可重连、当前会话启停）和子代理只读列表；状态 tab 展示模型、权限、目录、会话 ID、CLI、费用、活动工具和上下文分类用量。
+- `/model` 直接打开模型 tab，`/model <name>` 直接切换，`/model default` 恢复默认；`/context`、`/usage`、`/status` 打开状态 tab，`/permissions` 打开权限 tab，`/mcp`、`/agents` 打开扩展 tab，`/config` 打开设置，`/help` 打开 Web 命令帮助。
 - 输入完整斜杠命令名后按 Enter 直接执行；只输入前缀时 Enter 仍只补全选中项，避免误发。
 - CLI 的 `<synthetic>` assistant 消息显示为「系统」通知（灰色系统头像、无 `<synthetic>` 模型 chip）；`No response requested.` 等空系统消息不渲染。
-- 这些交互不把 CLI 的配置文本刷进对话，减少“终端输出掉进聊天记录”的噪声，也让模型/权限/上下文的配置入口保持一致。
+- 这些交互不把 CLI 的配置文本刷进对话，减少“终端输出掉进聊天记录”的噪声，也让模型/权限/上下文/扩展的配置入口保持一致。
+- 扩展 tab 的 MCP 卡片只显示安全元数据（名称、状态、scope/source、工具名），不显示 env/headers/命令路径；需要认证时明确提示“在终端运行 /mcp”。插件市场与 hooks 管理不进入 Web，保持 CLI 单一管理面。
 
 ## Diff 与代码块可读性（2026-11-23 优化）
 

@@ -3,7 +3,7 @@
 > 状态: current
 > 最后核对: 2026-11-24
 > 事实源: `server/src/`、`web/src/`、`agent-python` 无关；Claude Code CLI 与 Agent SDK 的运行时契约以本机 `claude --version` 和 `@anthropic-ai/claude-agent-sdk` 类型为准
-> 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [附件](ATTACHMENTS.md) · [Roadmap](ROADMAP.md)
+> 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [附件](ATTACHMENTS.md) · [扩展](EXTENSIONS.md) · [Roadmap](ROADMAP.md)
 
 ## 一句话
 
@@ -53,6 +53,7 @@ data/
 | `server/src/workspaces.ts` | 允许目录/默认目录的持久化与校验 |
 | `server/src/voice.ts` | 语音渠道注册、整段转写、实时渠道配置与可用性 |
 | `server/src/voiceLive.ts` | Gemini Live、OpenAI Realtime/分段、火山引擎流式会话 |
+| `server/src/runtime.ts` 的扩展方法 | `mcpServerStatus` / `supportedAgents` 安全映射；当前会话 MCP 启停/重连 |
 | `web/src/views/Chat.vue` | 事件合并、流式渲染、审批面板、命令/文件/附件/旁问/语音输入、Web 原生系统命令与会话设置 |
 
 ## 会话生命周期
