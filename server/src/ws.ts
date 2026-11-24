@@ -220,6 +220,51 @@ export function registerWs(app: FastifyInstance, manager: SessionManager): void 
             return;
           }
 
+          if (type === 'question.response') {
+            const requestId = typeof message.requestId === 'string' ? message.requestId : '';
+            if (!requestId) {
+              sendJson(socket, { type: 'error', message: '缺少问题请求 ID' });
+              return;
+            }
+            const answers =
+              message.answers && typeof message.answers === 'object'
+                ? (message.answers as Record<string, unknown>)
+                : undefined;
+            const skipped = message.skipped === true;
+            const ok = await manager.respondQuestion(sessionId, requestId, answers, skipped);
+            audit(
+              'question.answer',
+              {
+                id: sessionId,
+                requestId,
+                ok,
+                skipped,
+                answered: answers ? Object.keys(answers).length : 0,
+                via: 'ws',
+              },
+              req.ip,
+            );
+            if (!ok) sendJson(socket, { type: 'error', message: '问题请求已失效' });
+            return;
+          }
+
+          if (type === 'plan.response') {
+            const requestId = typeof message.requestId === 'string' ? message.requestId : '';
+            if (!requestId || typeof message.approved !== 'boolean') {
+              sendJson(socket, { type: 'error', message: '无效的计划确认参数' });
+              return;
+            }
+            const feedback = typeof message.feedback === 'string' ? message.feedback : '';
+            const ok = await manager.respondPlan(sessionId, requestId, message.approved, feedback);
+            audit(
+              'plan.decision',
+              { id: sessionId, requestId, approved: message.approved, ok, via: 'ws' },
+              req.ip,
+            );
+            if (!ok) sendJson(socket, { type: 'error', message: '计划请求已失效' });
+            return;
+          }
+
           if (type === 'interrupt') {
             await manager.interrupt(sessionId);
             audit('session.interrupt', { id: sessionId, via: 'ws' }, req.ip);

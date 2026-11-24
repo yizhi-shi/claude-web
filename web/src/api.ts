@@ -187,6 +187,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ requestId, decision, updatedInput }),
     }),
+  respondQuestion: (
+    id: string,
+    requestId: string,
+    answers?: Record<string, string>,
+    skipped = false,
+  ) =>
+    request<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(id)}/question`, {
+      method: 'POST',
+      body: JSON.stringify({ requestId, answers, skipped }),
+    }),
+  respondPlan: (id: string, requestId: string, approved: boolean, feedback?: string) =>
+    request<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(id)}/plan`, {
+      method: 'POST',
+      body: JSON.stringify({ requestId, approved, feedback }),
+    }),
   setMode: (id: string, mode: PermissionMode) =>
     request<SessionRuntimeState>(`/api/sessions/${encodeURIComponent(id)}/mode`, {
       method: 'POST',

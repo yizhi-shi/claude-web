@@ -25,8 +25,8 @@
 | 斜杠命令 | ✅ | ✅ | init 的 `slash_commands` + 内置菜单 |
 | Skills | ✅ | ✅ | init 的 `skills`，按 `/名字` 插入 |
 | `@` 文件引用 | ✅ | ✅ | `rg --files` 搜索，插入相对路径 |
-| Plan mode | ✅ | 🟡 | 可选择 plan 模式；计划确认交互待专项验证 |
-| 交互式提问（AskUserQuestion） | ✅ | 🟡 | 工具可调用；当前 Web 端返回“未回答”，问答面板列为后续 |
+| Plan mode | ✅ | ✅ | 可选择 plan 模式；`ExitPlanMode` 展示计划，支持批准 / 退回完善 / 修改意见 |
+| 交互式提问（AskUserQuestion） | ✅ | ✅ | 原生问答面板：单选、多选、描述/预览、自由输入、跳过；答案经 `updatedInput.answers` 回传，刷新可恢复 |
 | 图片粘贴/附件 | ✅ | ✅ | 粘贴/拖拽/选择文件；图片走 image content block，小文本内联，其他文件按路径引用 |
 | 旁问（`/btw`） | ✅ | ✅ | 顶栏入口或主输入框 `/btw` 均可打开可关闭的浮动面板；fork 上下文回答，禁工具、不写入主对话、不新增 Claude 会话文件 |
 | 检查点 / 回退 | ✅ | ⏳ | roadmap；SDK 有 rewind 控制面，需 UI |

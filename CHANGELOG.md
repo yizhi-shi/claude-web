@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-11-24
+
+- Interactive questions: `AskUserQuestion` now renders a native question panel instead of being auto-allowed with "未回答". Single-select, multi-select, option descriptions/previews, a free-text answer, skip, and per-question timeout are supported.
+- Answers are returned to the CLI through `updatedInput.answers`; the tool result is normal, so the model continues the same turn. Questions are shown even when the session default is `bypassPermissions`.
+- Plan approval: `ExitPlanMode` now presents the preceding assistant plan (the tool input itself carries no plan body) with approve / keep-planning decisions and optional feedback. Approving leaves plan mode; rejecting returns the feedback to the model.
+- Pending questions and plans live in runtime state, so a page refresh or reconnect restores the panel. They are also denied cleanly on stop/interrupt, and time out using `PERMISSION_TIMEOUT_MINUTES`.
+- WebSocket messages `question.response` / `plan.response` plus REST fallbacks `POST /api/sessions/:id/question` and `/plan`.
+- Public releases are now incremental: `scripts/publish.sh public` clones the existing public history, syncs the sanitized tree, commits as the public identity, pushes without force, and tags the package version.
+- Added end-to-end tests for question answering in bypass mode, plan capture, browser panels, and reload restoration.
+
 ## 0.5.0 — 2026-11-24
 
 - History pagination now works on renderable events instead of raw events: history queries use `compact=1`, which skips token-level `assistant.delta` records. A long answer no longer fills every history page by itself, so refresh and "load earlier" show the previous messages again.

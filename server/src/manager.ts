@@ -249,6 +249,28 @@ export class SessionManager {
     return runtime.respondPermission(requestId, decision, updatedInput);
   }
 
+  async respondQuestion(
+    id: string,
+    requestId: string,
+    answers?: Record<string, unknown>,
+    skipped = false,
+  ): Promise<boolean> {
+    const runtime = this.runtime(id);
+    if (!runtime) return false;
+    return runtime.respondQuestion(requestId, answers, skipped);
+  }
+
+  async respondPlan(
+    id: string,
+    requestId: string,
+    approved: boolean,
+    feedback?: string,
+  ): Promise<boolean> {
+    const runtime = this.runtime(id);
+    if (!runtime) return false;
+    return runtime.respondPlan(requestId, approved, feedback);
+  }
+
   async setMode(id: string, mode: string): Promise<void> {
     const runtime = await this.ensureRuntime(id);
     await runtime.setPermissionMode(this.normalizeMode(mode));
@@ -326,6 +348,7 @@ export class SessionManager {
       costUsd: meta.costUsd,
       tasks: [],
       pendingPermissions: [],
+      pendingQuestions: [],
       slashCommands: [],
       skills: [],
       tools: [],

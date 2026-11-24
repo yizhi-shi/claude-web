@@ -15,6 +15,10 @@ import type {
   ContextUsage,
   PermissionMode,
   PendingPermissionView,
+  PendingPlanView,
+  PendingQuestionView,
+  QuestionItem,
+  QuestionOption,
   RuntimeStatus,
   SessionMeta,
   SessionRuntimeState,
@@ -44,6 +48,22 @@ interface PendingPermission {
   timer: NodeJS.Timeout;
 }
 
+interface PendingQuestion {
+  view: PendingQuestionView;
+  input: Record<string, unknown>;
+  toolUseId?: string;
+  resolve: (result: PermissionResult) => void;
+  timer: NodeJS.Timeout;
+}
+
+interface PendingPlan {
+  view: PendingPlanView;
+  input: Record<string, unknown>;
+  toolUseId?: string;
+  resolve: (result: PermissionResult) => void;
+  timer: NodeJS.Timeout;
+}
+
 interface MessageAccumulator {
   parentKey: string;
   messageId: string;
@@ -56,6 +76,64 @@ interface MessageAccumulator {
 
 function parentKeyOf(parentToolUseId: unknown): string {
   return typeof parentToolUseId === 'string' && parentToolUseId ? parentToolUseId : 'main';
+}
+
+function questionOptions(value: unknown): QuestionOption[] {
+  if (!Array.isArray(value)) return [];
+  const options: QuestionOption[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.label !== 'string' || !row.label.trim()) continue;
+    const option: QuestionOption = {
+      label: row.label.trim().slice(0, 120),
+      description: typeof row.description === 'string' ? row.description.slice(0, 2000) : '',
+    };
+    if (typeof row.preview === 'string' && row.preview.trim()) {
+      option.preview = row.preview.slice(0, 8000);
+    }
+    options.push(option);
+    if (options.length >= 4) break;
+  }
+  return options;
+}
+
+/** Normalize the AskUserQuestion input; the CLI guarantees the shape, but a host must not trust it. */
+function parseQuestions(value: unknown): QuestionItem[] {
+  if (!Array.isArray(value)) return [];
+  const questions: QuestionItem[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.question !== 'string' || !row.question.trim()) continue;
+    const options = questionOptions(row.options);
+    if (options.length < 2) continue;
+    questions.push({
+      question: row.question.trim().slice(0, 4000),
+      header:
+        typeof row.header === 'string' && row.header.trim()
+          ? row.header.trim().slice(0, 48)
+          : '问题',
+      options,
+      multiSelect: row.multiSelect === true,
+    });
+    if (questions.length >= 4) break;
+  }
+  return questions;
+}
+
+function questionAnswers(
+  questions: QuestionItem[],
+  answers: Record<string, unknown> | undefined,
+  skipped: boolean,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of questions) {
+    const raw = answers?.[item.question];
+    const value = typeof raw === 'string' ? raw.trim().slice(0, 4000) : '';
+    out[item.question] = value || (skipped ? '用户跳过了这个问题，请按你的最佳判断继续。' : '');
+  }
+  return out;
 }
 
 function normalizeBlock(value: unknown): ContentBlock | null {
@@ -187,6 +265,10 @@ export class ClaudeRuntime {
   private accumulators = new Map<string, MessageAccumulator>();
   private activeMessage = new Map<string, string>();
   private pending = new Map<string, PendingPermission>();
+  private pendingQuestions = new Map<string, PendingQuestion>();
+  private pendingPlan?: PendingPlan;
+  /** Latest main-thread assistant text; ExitPlanMode carries no plan in its input. */
+  private lastAssistantText = '';
   private tasks = new Map<string, TaskView>();
   private currentTool?: { name: string; toolUseId?: string; startedAt: number; elapsedSeconds?: number };
   private activeTools = new Map<
@@ -396,6 +478,8 @@ export class ClaudeRuntime {
       tasks: [...this.tasks.values()].sort((a, b) => a.startedAt - b.startedAt).slice(-30),
       contextUsage: this.contextUsage,
       pendingPermissions: [...this.pending.values()].map((p) => p.view),
+      pendingQuestions: [...this.pendingQuestions.values()].map((p) => p.view),
+      pendingPlan: this.pendingPlan?.view,
       claudeVersion: this.claudeVersion,
       slashCommandCount: this.slashCommandCount,
       skillCount: this.skillCount,
@@ -438,6 +522,7 @@ export class ClaudeRuntime {
     const refs: AttachmentRef[] = attachments.map((attachment) => attachment.ref);
     const wasRunning = this.status === 'running' || this.status === 'waiting_permission';
     const eventId = randomId();
+    this.lastAssistantText = '';
     this.clearIdleTimer();
     this.emit({
       type: 'user.message',
@@ -508,8 +593,27 @@ export class ClaudeRuntime {
       this.emit({ type: 'permission.resolved', requestId, decision: 'deny' });
     }
     this.pending.clear();
+    for (const [requestId, pending] of this.pendingQuestions) {
+      clearTimeout(pending.timer);
+      pending.resolve({ behavior: 'deny', message, toolUseID: pending.toolUseId });
+      this.emit({ type: 'question.resolved', requestId, skipped: true, reason: message });
+    }
+    this.pendingQuestions.clear();
+    if (this.pendingPlan) {
+      const pending = this.pendingPlan;
+      clearTimeout(pending.timer);
+      pending.resolve({ behavior: 'deny', message, toolUseID: pending.toolUseId });
+      this.emit({
+        type: 'plan.resolved',
+        requestId: pending.view.requestId,
+        approved: false,
+        reason: message,
+      });
+      this.pendingPlan = undefined;
+    }
     if (this.status === 'waiting_permission') {
       this.status = 'running';
+      this.statusDetail = undefined;
       this.emit({ type: 'session.status', status: 'running' });
     }
     this.notifyState(true);
@@ -614,11 +718,79 @@ export class ClaudeRuntime {
     return true;
   }
 
+  async respondQuestion(
+    requestId: string,
+    answers?: Record<string, unknown>,
+    skipped = false,
+  ): Promise<boolean> {
+    const pending = this.pendingQuestions.get(requestId);
+    if (!pending) return false;
+    clearTimeout(pending.timer);
+    this.pendingQuestions.delete(requestId);
+    const normalized = questionAnswers(pending.view.questions, answers, skipped);
+    pending.resolve({
+      behavior: 'allow',
+      updatedInput: { ...pending.input, answers: normalized },
+      toolUseID: pending.toolUseId,
+    });
+    this.emit({
+      type: 'question.resolved',
+      requestId,
+      answers: normalized,
+      ...(skipped ? { skipped: true } : {}),
+    });
+    this.finishWaitingIfIdle();
+    return true;
+  }
+
+  async respondPlan(
+    requestId: string,
+    approved: boolean,
+    feedback?: string,
+  ): Promise<boolean> {
+    const pending = this.pendingPlan;
+    if (!pending || pending.view.requestId !== requestId) return false;
+    clearTimeout(pending.timer);
+    this.pendingPlan = undefined;
+    const note = typeof feedback === 'string' ? feedback.trim().slice(0, 4000) : '';
+    if (approved) {
+      pending.resolve({
+        behavior: 'allow',
+        updatedInput: pending.input,
+        toolUseID: pending.toolUseId,
+      });
+    } else {
+      pending.resolve({
+        behavior: 'deny',
+        message: note || '用户暂不批准该计划，请继续完善计划后再提交。',
+        toolUseID: pending.toolUseId,
+      });
+    }
+    this.emit({
+      type: 'plan.resolved',
+      requestId,
+      approved,
+      ...(note && !approved ? { feedback: note } : {}),
+    });
+    this.finishWaitingIfIdle();
+    return true;
+  }
+
   private async canUseTool(
     toolName: string,
     input: Record<string, unknown>,
     opts: PermissionOptions,
   ): Promise<PermissionResult> {
+    // AskUserQuestion is not a permission prompt: even in "allow everything"
+    // mode the user must answer it, otherwise the CLI reports "未回答".
+    if (toolName === 'AskUserQuestion') {
+      return this.askQuestion(input, opts);
+    }
+    // ExitPlanMode carries no plan body; the plan is the preceding assistant
+    // message. Present it before letting the CLI leave plan mode.
+    if (toolName === 'ExitPlanMode' && !this.autoAllowAll) {
+      return this.approvePlan(input, opts);
+    }
     if (this.autoAllowAll) {
       return { behavior: 'allow', updatedInput: input, toolUseID: opts.toolUseID };
     }
@@ -637,9 +809,7 @@ export class ClaudeRuntime {
       createdAt: Date.now(),
     };
     this.emit({ type: 'permission.request', ...view });
-    this.status = 'waiting_permission';
-    this.statusDetail = `等待批准：${toolName}`;
-    this.emit({ type: 'session.status', status: 'waiting_permission', detail: this.statusDetail });
+    this.setWaiting(`等待批准：${toolName}`);
     this.notifyState(true);
 
     return new Promise<PermissionResult>((resolve) => {
@@ -652,10 +822,7 @@ export class ClaudeRuntime {
           toolUseID: opts.toolUseID,
         });
         this.emit({ type: 'permission.resolved', requestId, decision: 'timeout' });
-        if (this.pending.size === 0 && this.status === 'waiting_permission') {
-          this.status = 'running';
-          this.emit({ type: 'session.status', status: 'running' });
-        }
+        this.finishWaitingIfIdle();
         this.notifyState(true);
       }, config.permissionTimeoutMs);
       timer.unref?.();
@@ -670,6 +837,115 @@ export class ClaudeRuntime {
     });
   }
 
+  private setWaiting(detail: string): void {
+    this.status = 'waiting_permission';
+    this.statusDetail = detail;
+    this.emit({ type: 'session.status', status: 'waiting_permission', detail });
+    this.notifyState(true);
+  }
+
+  private finishWaitingIfIdle(): void {
+    if (
+      this.pending.size === 0 &&
+      this.pendingQuestions.size === 0 &&
+      !this.pendingPlan &&
+      this.status === 'waiting_permission'
+    ) {
+      this.status = 'running';
+      this.statusDetail = undefined;
+      this.emit({ type: 'session.status', status: 'running' });
+    }
+    this.notifyState(true);
+  }
+
+  private async askQuestion(
+    input: Record<string, unknown>,
+    opts: PermissionOptions,
+  ): Promise<PermissionResult> {
+    const questions = parseQuestions(input.questions);
+    if (questions.length === 0) {
+      // Malformed or an older CLI shape: let the tool handle it rather than
+      // blocking the turn. The CLI will send its own unanswered result.
+      return { behavior: 'allow', updatedInput: input, toolUseID: opts.toolUseID };
+    }
+    this.clearIdleTimer();
+    const requestId = opts.requestId || randomId();
+    const view: PendingQuestionView = {
+      requestId,
+      toolUseId: opts.toolUseID,
+      questions,
+      createdAt: Date.now(),
+    };
+    this.emit({ type: 'question.request', ...view });
+    this.setWaiting(`等待回答：${questions[0]?.header || '问题'}`);
+
+    return new Promise<PermissionResult>((resolve) => {
+      const timer = setTimeout(() => {
+        if (!this.pendingQuestions.has(requestId)) return;
+        this.pendingQuestions.delete(requestId);
+        const answers = questionAnswers(questions, undefined, true);
+        resolve({
+          behavior: 'allow',
+          updatedInput: { ...input, answers },
+          toolUseID: opts.toolUseID,
+        });
+        this.emit({ type: 'question.resolved', requestId, answers, timedOut: true });
+        this.finishWaitingIfIdle();
+        this.notifyState(true);
+      }, config.permissionTimeoutMs);
+      timer.unref?.();
+      this.pendingQuestions.set(requestId, {
+        view,
+        input,
+        toolUseId: opts.toolUseID,
+        resolve,
+        timer,
+      });
+    });
+  }
+
+  private async approvePlan(
+    input: Record<string, unknown>,
+    opts: PermissionOptions,
+  ): Promise<PermissionResult> {
+    this.clearIdleTimer();
+    const requestId = opts.requestId || randomId();
+    const plan =
+      (typeof input.plan === 'string' && input.plan.trim()) ||
+      this.lastAssistantText.trim() ||
+      '（模型没有提供计划正文，请根据对话上下文确认。）';
+    const view: PendingPlanView = {
+      requestId,
+      toolUseId: opts.toolUseID,
+      plan,
+      createdAt: Date.now(),
+    };
+    this.emit({ type: 'plan.request', ...view });
+    this.setWaiting('等待确认计划');
+
+    return new Promise<PermissionResult>((resolve) => {
+      const timer = setTimeout(() => {
+        if (this.pendingPlan?.view.requestId !== requestId) return;
+        this.pendingPlan = undefined;
+        resolve({
+          behavior: 'deny',
+          message: '等待用户确认计划超时，请继续完善计划',
+          toolUseID: opts.toolUseID,
+        });
+        this.emit({ type: 'plan.resolved', requestId, approved: false, timedOut: true });
+        this.finishWaitingIfIdle();
+      }, config.permissionTimeoutMs);
+      timer.unref?.();
+      this.pendingPlan = {
+        view,
+        input,
+        toolUseId: opts.toolUseID,
+        resolve,
+        timer,
+      };
+    });
+  }
+
   private flushAccumulator(acc: MessageAccumulator): void {
     const blocks = acc.order
       .map((index) => acc.blocks.get(index))
@@ -681,6 +957,14 @@ export class ClaudeRuntime {
         return block;
       });
     if (blocks.length === 0) return;
+    if (acc.parentKey === 'main') {
+      const text = blocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('\n')
+        .trim();
+      if (text) this.lastAssistantText = text;
+    }
     this.emit({
       type: 'assistant.message',
       messageId: acc.messageId,
@@ -1018,6 +1302,15 @@ export class ClaudeRuntime {
       if (delta.type === 'text_delta' && typeof delta.text === 'string') {
         block.type = 'text';
         block.text = (block.text ?? '') + delta.text;
+        if (parentKey === 'main') {
+          const text = acc.order
+            .map((key) => acc.blocks.get(key))
+            .filter((item): item is ContentBlock => item?.type === 'text')
+            .map((item) => item.text ?? '')
+            .join('\n')
+            .trim();
+          if (text) this.lastAssistantText = text;
+        }
         if (parentKey === 'main' && delta.text) {
           this.emit({
             type: 'assistant.delta',
@@ -1083,6 +1376,14 @@ export class ClaudeRuntime {
         }
       }
       if (blocks.length > 0) {
+        if (parentKey === 'main') {
+          const text = blocks
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text ?? '')
+            .join('\n')
+            .trim();
+          if (text) this.lastAssistantText = text;
+        }
         this.emit({
           type: 'assistant.message',
           messageId,
@@ -1181,6 +1482,24 @@ export class ClaudeRuntime {
       this.emit({ type: 'permission.resolved', requestId, decision: 'deny' });
     }
     this.pending.clear();
+    for (const [requestId, pending] of this.pendingQuestions) {
+      clearTimeout(pending.timer);
+      pending.resolve({ behavior: 'deny', message: '会话已停止', toolUseID: pending.toolUseId });
+      this.emit({ type: 'question.resolved', requestId, skipped: true, reason: '会话已停止' });
+    }
+    this.pendingQuestions.clear();
+    if (this.pendingPlan) {
+      const pending = this.pendingPlan;
+      clearTimeout(pending.timer);
+      pending.resolve({ behavior: 'deny', message: '会话已停止', toolUseID: pending.toolUseId });
+      this.emit({
+        type: 'plan.resolved',
+        requestId: pending.view.requestId,
+        approved: false,
+        reason: '会话已停止',
+      });
+      this.pendingPlan = undefined;
+    }
     try {
       await this.q?.return(undefined);
     } catch {

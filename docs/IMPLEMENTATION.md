@@ -277,6 +277,32 @@ canUseTool: () => ({ behavior: 'allow', updatedInput: input })
 
 仍走 SDK → CLI 的控制响应，只是没有人工环节。
 
+### AskUserQuestion / ExitPlanMode
+
+这两个工具也走 `canUseTool`，但语义不是“允许/拒绝工具”，而是“把用户的输入交给工具”：
+
+```ts
+// AskUserQuestion: 原输入 + answers 作为 updatedInput
+pending.resolve({
+  behavior: 'allow',
+  updatedInput: { ...pending.input, answers }, // key = question 原文
+  toolUseID,
+});
+
+// ExitPlanMode: 批准时原样 allow；拒绝时 deny + 修改意见
+pending.resolve(
+  approved
+    ? { behavior: 'allow', updatedInput: pending.input, toolUseID }
+    : { behavior: 'deny', message: feedback, toolUseID },
+);
+```
+
+- `AskUserQuestion` 的输入包含 1–4 个问题，每个问题 2–4 个选项；`multiSelect` 时答案用逗号拼接。问题必须**始终**展示给人，即使会话是 `bypassPermissions`，否则 CLI 只能收到“未回答”。
+- `ExitPlanMode` 的 tool input 只有 `{}`（`allowedPrompts` 已废弃），计划正文在前一条 assistant 消息里。运行时在流式 `text_delta` 时维护 `lastAssistantText`，控制请求到达时直接取用；不能等 `message_stop`，否则面板会拿到旧文本或空文本。
+- 两类挂起项分别存在 `pendingQuestions` / `pendingPlan`，随 `question.request` / `plan.request` 事件写入 transcript；`session.state` 同时携带它们，所以刷新/重连能恢复面板。
+- 超时分别按“跳过问题、让 Claude 自行判断”和“拒绝计划、继续完善”处理；停止/中断时全部 deny，避免 CLI 挂死。
+- 前端面板在输入区上方：`QuestionPanel`（单选/多选/自由输入/跳过）和 `PlanPanel`（Markdown 计划/修改意见/批准/退回）。答案经 WS `question.response` / `plan.response` 或 REST 兜底提交。
+
 ## 5. 文件 diff 从哪里来
 
 diff 不在服务端读文件生成，也不把整份文件传来传去；它直接来自 CLI 的 `tool_use` 输入。

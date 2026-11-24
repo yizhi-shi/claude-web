@@ -6,12 +6,16 @@ import AppShell from '../components/AppShell.vue';
 import Icon from '../components/Icon.vue';
 import MessageItem from '../components/MessageItem.vue';
 import PermissionPanel from '../components/PermissionPanel.vue';
+import PlanPanel from '../components/PlanPanel.vue';
+import QuestionPanel from '../components/QuestionPanel.vue';
 import VoiceControl from '../components/VoiceControl.vue';
 import { buildChatItems } from '../chatModel';
 import { appConfig, loadConfig, refreshSessions, toast } from '../store';
 import type {
   AttachmentRef,
   PendingPermissionView,
+  PendingPlanView,
+  PendingQuestionView,
   PermissionMode,
   SessionRuntimeState,
   StoredEvent,
@@ -45,6 +49,12 @@ const sending = ref(false);
 const permissionBusy = ref(false);
 const pending = ref<PendingPermissionView | null>(null);
 const resolvedRequests = new Set<string>();
+const pendingQuestion = ref<PendingQuestionView | null>(null);
+const pendingPlan = ref<PendingPlanView | null>(null);
+const questionBusy = ref(false);
+const planBusy = ref(false);
+const resolvedQuestions = new Set<string>();
+const resolvedPlans = new Set<string>();
 const draft = ref('');
 const messagesEl = ref<HTMLDivElement | null>(null);
 const threadEl = ref<HTMLDivElement | null>(null);
@@ -171,6 +181,8 @@ const activeTasks = computed(
 );
 const activeToolList = computed(() => state.value?.activeTools ?? []);
 const runtimeLabel = computed(() => {
+  if (pendingQuestion.value) return '等待你的回答';
+  if (pendingPlan.value) return '计划待确认';
   if (state.value?.statusDetail) return state.value.statusDetail;
   if (activeToolList.value.length > 0) {
     const names = activeToolList.value.map((tool) => tool.name).slice(0, 3);
@@ -457,6 +469,28 @@ function applySideEffects(event: StoredEvent): void {
     if (event.decision === 'timeout') toast('审批超时，已自动拒绝', 'error');
     return;
   }
+  if (event.type === 'question.request') {
+    resolvedQuestions.delete(event.requestId);
+    pendingQuestion.value = event as unknown as PendingQuestionView;
+    return;
+  }
+  if (event.type === 'question.resolved') {
+    resolvedQuestions.add(event.requestId);
+    if (pendingQuestion.value?.requestId === event.requestId) pendingQuestion.value = null;
+    if (event.timedOut) toast('问答超时，已让 Claude 自行判断', 'info');
+    return;
+  }
+  if (event.type === 'plan.request') {
+    resolvedPlans.delete(event.requestId);
+    pendingPlan.value = event as unknown as PendingPlanView;
+    return;
+  }
+  if (event.type === 'plan.resolved') {
+    resolvedPlans.add(event.requestId);
+    if (pendingPlan.value?.requestId === event.requestId) pendingPlan.value = null;
+    if (event.timedOut) toast('计划确认超时，已按拒绝处理', 'info');
+    return;
+  }
   if (event.type === 'turn.result') {
     current.status = 'idle';
     current.statusDetail = undefined;
@@ -484,11 +518,36 @@ function derivePending(): void {
   }
   const fromState = state.value?.pendingPermissions ?? [];
   const candidate = fromState.find((item) => !resolvedRequests.has(item.requestId));
-  if (candidate) {
-    pending.value = candidate;
-    return;
+  pending.value = candidate ?? [...map.values()].at(-1) ?? null;
+
+  const questions = new Map<string, PendingQuestionView>();
+  const plans = new Map<string, PendingPlanView>();
+  for (const event of events.value) {
+    if (event.type === 'question.request') {
+      if (!resolvedQuestions.has(event.requestId)) {
+        questions.set(event.requestId, event as unknown as PendingQuestionView);
+      }
+    } else if (event.type === 'question.resolved') {
+      resolvedQuestions.add(event.requestId);
+      questions.delete(event.requestId);
+    } else if (event.type === 'plan.request') {
+      if (!resolvedPlans.has(event.requestId)) {
+        plans.set(event.requestId, event as unknown as PendingPlanView);
+      }
+    } else if (event.type === 'plan.resolved') {
+      resolvedPlans.add(event.requestId);
+      plans.delete(event.requestId);
+    }
   }
-  pending.value = [...map.values()].at(-1) ?? null;
+  const stateQuestion = (state.value?.pendingQuestions ?? []).find(
+    (item) => !resolvedQuestions.has(item.requestId),
+  );
+  pendingQuestion.value = stateQuestion ?? [...questions.values()].at(-1) ?? null;
+  const statePlan = state.value?.pendingPlan;
+  pendingPlan.value =
+    statePlan && !resolvedPlans.has(statePlan.requestId)
+      ? statePlan
+      : [...plans.values()].at(-1) ?? null;
 }
 
 async function load(): Promise<void> {
@@ -500,7 +559,11 @@ async function load(): Promise<void> {
   firstSeq.value = 0;
   hasMoreEarlier.value = false;
   pending.value = null;
+  pendingQuestion.value = null;
+  pendingPlan.value = null;
   resolvedRequests.clear();
+  resolvedQuestions.clear();
+  resolvedPlans.clear();
   stickToBottom.value = true;
   await loadConfig();
   try {
@@ -907,6 +970,80 @@ async function respond(decision: 'allow_once' | 'allow_session' | 'deny'): Promi
     toast(err instanceof ApiError ? err.message : '审批失败', 'error');
   } finally {
     permissionBusy.value = false;
+  }
+}
+
+async function answerQuestion(answers: Record<string, string>): Promise<void> {
+  const request = pendingQuestion.value;
+  if (!request || questionBusy.value) return;
+  questionBusy.value = true;
+  resolvedQuestions.add(request.requestId);
+  try {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'question.response',
+          requestId: request.requestId,
+          answers,
+        }),
+      );
+    } else {
+      await api.respondQuestion(sessionId.value, request.requestId, answers);
+    }
+    pendingQuestion.value = null;
+  } catch (err) {
+    resolvedQuestions.delete(request.requestId);
+    toast(err instanceof ApiError ? err.message : '提交回答失败', 'error');
+  } finally {
+    questionBusy.value = false;
+  }
+}
+
+async function skipQuestion(): Promise<void> {
+  const request = pendingQuestion.value;
+  if (!request || questionBusy.value) return;
+  questionBusy.value = true;
+  resolvedQuestions.add(request.requestId);
+  try {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'question.response', requestId: request.requestId, skipped: true }));
+    } else {
+      await api.respondQuestion(sessionId.value, request.requestId, undefined, true);
+    }
+    pendingQuestion.value = null;
+  } catch (err) {
+    resolvedQuestions.delete(request.requestId);
+    toast(err instanceof ApiError ? err.message : '跳过失败', 'error');
+  } finally {
+    questionBusy.value = false;
+  }
+}
+
+async function decidePlan(approved: boolean, feedback?: string): Promise<void> {
+  const request = pendingPlan.value;
+  if (!request || planBusy.value) return;
+  planBusy.value = true;
+  resolvedPlans.add(request.requestId);
+  try {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'plan.response',
+          requestId: request.requestId,
+          approved,
+          feedback,
+        }),
+      );
+    } else {
+      await api.respondPlan(sessionId.value, request.requestId, approved, feedback);
+    }
+    pendingPlan.value = null;
+    toast(approved ? '已批准计划，开始执行' : '已退回计划，继续完善');
+  } catch (err) {
+    resolvedPlans.delete(request.requestId);
+    toast(err instanceof ApiError ? err.message : '计划确认失败', 'error');
+  } finally {
+    planBusy.value = false;
   }
 }
 
@@ -1382,8 +1519,23 @@ onUnmounted(() => {
       </div>
 
       <div class="composer-wrap">
+        <QuestionPanel
+          v-if="pendingQuestion"
+          :question="pendingQuestion"
+          :busy="questionBusy"
+          :timeout-minutes="appConfig?.permissionTimeoutMinutes"
+          @submit="answerQuestion"
+          @skip="skipQuestion"
+        />
+        <PlanPanel
+          v-else-if="pendingPlan"
+          :plan="pendingPlan"
+          :busy="planBusy"
+          :timeout-minutes="appConfig?.permissionTimeoutMinutes"
+          @decide="decidePlan"
+        />
         <PermissionPanel
-          v-if="pending"
+          v-else-if="pending"
           :permission="pending"
           :busy="permissionBusy"
           :timeout-minutes="appConfig?.permissionTimeoutMinutes"

@@ -502,6 +502,46 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     return { ok, state: manager.state(id) };
   });
 
+  authed(app, 'POST', '/api/sessions/:id/question', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as
+      | { requestId?: unknown; answers?: unknown; skipped?: unknown }
+      | undefined;
+    const requestId = typeof body?.requestId === 'string' ? body.requestId : '';
+    if (!requestId) return reply.code(400).send({ error: '缺少问题请求 ID' });
+    const answers =
+      body?.answers && typeof body.answers === 'object'
+        ? (body.answers as Record<string, unknown>)
+        : undefined;
+    const skipped = body?.skipped === true;
+    const ok = await manager.respondQuestion(id, requestId, answers, skipped);
+    audit(
+      'question.answer',
+      { id, requestId, ok, skipped, answered: answers ? Object.keys(answers).length : 0 },
+      req.ip,
+    );
+    return { ok, state: manager.state(id) };
+  });
+
+  authed(app, 'POST', '/api/sessions/:id/plan', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as
+      | { requestId?: unknown; approved?: unknown; feedback?: unknown }
+      | undefined;
+    const requestId = typeof body?.requestId === 'string' ? body.requestId : '';
+    if (!requestId || typeof body?.approved !== 'boolean') {
+      return reply.code(400).send({ error: '无效的计划确认参数' });
+    }
+    const feedback = typeof body.feedback === 'string' ? body.feedback : '';
+    const ok = await manager.respondPlan(id, requestId, body.approved, feedback);
+    audit(
+      'plan.decision',
+      { id, requestId, approved: body.approved, ok, feedbackChars: feedback.length },
+      req.ip,
+    );
+    return { ok, state: manager.state(id) };
+  });
+
   authed(app, 'POST', '/api/sessions/:id/mode', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { mode?: unknown } | undefined;

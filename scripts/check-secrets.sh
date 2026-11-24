@@ -43,6 +43,8 @@ if [ "$MODE" = "private" ]; then
     --exclude='REPO-STRATEGY.md'
     --exclude='PLAN.md'
     --exclude-dir=private
+    --exclude-dir=.local-secrets
+    --exclude-dir=cloudflare
   )
 fi
 

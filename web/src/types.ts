@@ -65,6 +65,33 @@ export interface PendingPermissionView {
   createdAt: number;
 }
 
+export interface QuestionOption {
+  label: string;
+  description: string;
+  preview?: string;
+}
+
+export interface QuestionItem {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface PendingQuestionView {
+  requestId: string;
+  toolUseId?: string;
+  questions: QuestionItem[];
+  createdAt: number;
+}
+
+export interface PendingPlanView {
+  requestId: string;
+  toolUseId?: string;
+  plan: string;
+  createdAt: number;
+}
+
 export interface SessionRuntimeState {
   id: string;
   claudeSessionId?: string;
@@ -84,6 +111,8 @@ export interface SessionRuntimeState {
   tasks: TaskView[];
   contextUsage?: ContextUsage;
   pendingPermissions: PendingPermissionView[];
+  pendingQuestions?: PendingQuestionView[];
+  pendingPlan?: PendingPlanView;
   claudeVersion?: string;
   slashCommandCount?: number;
   skillCount?: number;
@@ -167,6 +196,36 @@ export type UiEvent =
       requestId: string;
       decision: PermissionDecision | 'timeout';
       by?: string;
+    })
+  | (EventBase & {
+      type: 'question.request';
+      requestId: string;
+      toolUseId?: string;
+      questions: QuestionItem[];
+      createdAt: number;
+    })
+  | (EventBase & {
+      type: 'question.resolved';
+      requestId: string;
+      answers?: Record<string, string>;
+      skipped?: boolean;
+      timedOut?: boolean;
+      reason?: string;
+    })
+  | (EventBase & {
+      type: 'plan.request';
+      requestId: string;
+      toolUseId?: string;
+      plan: string;
+      createdAt: number;
+    })
+  | (EventBase & {
+      type: 'plan.resolved';
+      requestId: string;
+      approved: boolean;
+      feedback?: string;
+      timedOut?: boolean;
+      reason?: string;
     })
   | (EventBase & {
       type: 'turn.result';

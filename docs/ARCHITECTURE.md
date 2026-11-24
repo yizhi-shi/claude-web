@@ -75,6 +75,8 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 - `assistant.delta`（文本/思考增量） / `assistant.message`（final blocks）
 - `tool.result`
 - `permission.request` / `permission.resolved`
+- `question.request` / `question.resolved`（AskUserQuestion；答案走 `updatedInput.answers`）
+- `plan.request` / `plan.resolved`（ExitPlanMode；计划正文取前面 assistant 流式文本）
 - `turn.result`
 - `notice`
 
@@ -92,7 +94,7 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 | `auto` / `dontAsk` | 交给 CLI 分类器/既有规则 |
 | `bypassPermissions` | UI 语义为“全部允许” |
 
-**root 限制**：Claude Code 拒绝 root 使用 `--dangerously-skip-permissions`。因此 `bypassPermissions` 在服务端被**等价实现**为：CLI 以 `default` 启动，`canUseTool` 立即 allow。工具调用与结果仍然进入 transcript/审计，便于追溯。
+**root 限制**：Claude Code 拒绝 root 使用 `--dangerously-skip-permissions`。因此 `bypassPermissions` 在服务端被**等价实现**为：CLI 以 `default` 启动，`canUseTool` 立即 allow。工具调用与结果仍然进入 transcript/审计，便于追溯。`AskUserQuestion` 例外：它需要人的答案，即使 `bypassPermissions` 也走问答面板；`ExitPlanMode` 在 plan 模式下同理。
 
 ## 不变量
 
@@ -103,7 +105,7 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 5. 密钥只存在 `data/`（0600）或服务环境变量；API 不回显完整密钥。
 6. `bypassPermissions` 不直接透传为 CLI flag（root 会拒绝）。
 7. 历史导入必须合并同 messageId 的 assistant chunk，并标记 final。
-8. 页面重连必须同时恢复：状态、待审批、活动工具、后台任务、最近事件。
+8. 页面重连必须同时恢复：状态、待审批、待回答的问题、待确认的计划、活动工具、后台任务、最近事件。
 
 ## 语音链路
 

@@ -57,8 +57,18 @@
 - `MessageItem`：用户气泡、Markdown、思考折叠、工具卡片、通知、回合元信息；流式思考的 260px 内层滚动区默认跟随到底部，用户手动上滚后不强制拉回。
 - `ToolCard`：命令/ diff / 结果；错误自动展开；ANSI 输出。
 - `PermissionPanel`：默认拒绝焦点、命令或 diff、三种决策。
+- `QuestionPanel`：AskUserQuestion 的单选/多选问答卡；选项描述与可选预览、自由输入、跳过；提交把 `answers` 回传给 runtime。
+- `PlanPanel`：ExitPlanMode 的计划确认卡；Markdown 计划正文、修改意见、批准并执行 / 继续完善计划。
 - `VoiceControl`：单一麦克风按钮，直接开始/结束听写；任一首选实时渠道的 partial 经 `start/partial/text/end` 事件交给 Chat 实时替换输入框同一段文本；停止后忽略迟到 partial，按钮进入“处理中”，再点一次立即取消；错误走 toast。
 - `VoiceSettings`：设置页内的渠道配置、密钥掩码、连接测试、预设；桌面与手机均可用，是唯一的语音配置入口。
+
+### 交互确认面板
+
+`AskUserQuestion` 与 `ExitPlanMode` 都固定在输入区上方，和审批面板同一层级；面板显示期间任务保持暂停，刷新后从 `session.state` 恢复。
+
+![AskUserQuestion 问答面板](screenshots/question-panel-light.png)
+
+![ExitPlanMode 计划确认面板](screenshots/plan-panel-light.png)
 
 ## 输入区与停止（2026-11-24 优化）
 

@@ -33,6 +33,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 刷新自动恢复 | 页面重开要看到“还在跑”的任务 | 事件持久化到 `data/transcripts/<id>.jsonl`；重连时按 `lastSeq` 回放，并下发当前运行状态、活动工具、待审批、后台任务 |
 | 实时对话 | 打字机式输出和工具过程 | SDK `includePartialMessages` 产生文本/思考增量，服务端归一化为 `assistant.delta` / `assistant.message`，经 WebSocket 推送；前端 Markdown + 工具卡片渲染 |
 | 权限审批 | 危险命令需要人确认 | SDK `canUseTool` 回调把请求挂起并下发；前端展示命令或新旧文件 diff；返回 allow once / allow session / deny；超时自动拒绝 |
+| 交互提问 / 计划确认 | Claude 需要用户选择或批准计划时不能卡住 | `AskUserQuestion` 渲染单选/多选问答卡片，答案经 `updatedInput.answers` 回传；`ExitPlanMode` 展示前一条 assistant 消息中的计划，支持批准、退回完善与修改意见。挂起项存在运行时状态里，刷新可恢复；即使会话默认全部允许，提问仍会显示 |
 | “全部允许”默认模式 | 个人可信环境不想每次点确认 | UI 选择 `bypassPermissions`；由于 CLI 禁止 root 使用 `--dangerously-skip-permissions`，服务端用 `default` 模式 + `canUseTool` 自动放行来等价实现（仍记录工具调用） |
 | 历史会话 / 续聊 | 复用终端或 VSCode 里已有的会话 | 扫描 `~/.claude/projects/*/*.jsonl`；把 Claude 原始 transcript 归一化为 Web 事件；用 `resume` 恢复同一 session；大历史只加载最近窗口，可“加载更早” |
 | 历史分页 / 排队消息 | 刷新后历史不能丢；排队发送要看得见 | 历史查询带 `compact=1`，过滤 token 级 `assistant.delta`，按消息级事件分页；滚到顶部自动加载更早。运行中发送的消息立即入 transcript，`user.message` 带 `queued`；回合边界发 `user.message.delivered`，停止时发 `user.message.failed`，输入区显示排队 chip |
