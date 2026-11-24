@@ -1,5 +1,7 @@
 # Claude Code Web
 
+简体中文 | [English](README.en.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Agent%20SDK-22c55e)](https://docs.anthropic.com/en/docs/claude-code)
@@ -300,6 +302,9 @@ curl -fsS http://127.0.0.1:8010/api/health
 - [MCP / 子代理 / 插件：Web 管理范围](docs/EXTENSIONS.md)
 - [同类项目调研与取舍](docs/COMPETITIVE-RESEARCH.md)
 - [UI 布局与交互决策](docs/UI-DESIGN.md)
+- [English documentation index / design summaries](docs/README.en.md)
+
+入口文档（README / 安全 / 贡献指南）提供完整中英双语；设计文档以中文为事实源，英文摘要集中在 [docs/README.en.md](docs/README.en.md)。修改任一份时请同步另一份，规则见 [docs/I18N.md](docs/I18N.md)。
 
 ## 许可证
 

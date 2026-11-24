@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — 2026-11-24
+
+- Bilingual documentation: full English `README.en.md`, Chinese `SECURITY.zh-CN.md` and `CONTRIBUTING.zh-CN.md`, with language switches on every pair.
+- Added `docs/README.en.md` as the English documentation index with summaries of the Chinese canonical design documents.
+- Recorded the mandatory bilingual policy in `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING*.md` and `docs/I18N.md`: UI strings must update the `EN` dictionary, entry documents must change in pairs, and design-doc changes must update their English summaries.
+
 ## 0.10.0 — 2026-11-24
 
 - Added built-in Chinese/English UI switching. A lightweight `web/src/i18n.ts` dictionary plus reactive `t()` covers navigation, login/setup, home, chat controls, approval/question/plan panels, tool cards, voice settings and session settings.

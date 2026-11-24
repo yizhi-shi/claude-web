@@ -1,5 +1,7 @@
 # Security Policy
 
+English | [简体中文](SECURITY.zh-CN.md)
+
 ## Threat model
 
 Claude Code Web runs a local `claude` CLI as the service user. Anyone who can use the console can execute commands and modify files with that user's permissions. Treat it as a **remote terminal**, not a read-only dashboard.
