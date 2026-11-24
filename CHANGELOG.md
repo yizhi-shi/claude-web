@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 — 2026-11-24
+
+- Side questions no longer resume or fork the main Claude session. `manager.sideQuestion()` builds a compact context from the latest ~160 renderable events (24k char cap, tool inputs/results truncated, current active tools) and `sideQuestion.ts` runs a fresh, non-persisted, tool-less query with `strictMcpConfig: true` and a read-only system prompt.
+- This fixes the live “旁问失败，请稍后重试” failure: a resumed active session could contain an unfinished tool call, causing the model to attempt tools and end with `error_max_turns` (even with `maxTurns: 2` for tool-inviting questions). The compact-context path answers directly and does not compete with the main runtime.
+- Side questions are much cheaper on long sessions (one real test dropped from a multi-dollar resumed query to ~$0.03–0.09) and no longer inherit the main session lock/history size.
+- Verified against the exact failing 452 KB session: “这个目录里有什么？” returns a context-grounded answer instead of an error; “项目代号是什么？” returns ORANGE-42 from the compact context.
+- Error handling and per-turn cost reporting from 0.6.1 remain.
+
 ## 0.7.1 — 2026-11-24
 
 - Documentation release for the attachment pipeline: added `docs/ATTACHMENTS.md` covering browser file picker/paste/drag → upload API → `data/attachments` storage → attachment ids on send → `AttachmentStore.resolve()` → `buildUserContent()` text/image blocks → Agent SDK/CLI reception → authenticated history replay.

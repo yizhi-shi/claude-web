@@ -37,6 +37,64 @@ const MODES: PermissionMode[] = [
   'auto',
 ];
 
+const SIDE_CONTEXT_MAX_CHARS = 24_000;
+
+function clipContext(value: unknown, max: number): string {
+  const text = typeof value === 'string' ? value : value == null ? '' : String(value);
+  const clean = text.replace(/\r\n/g, '\n').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+function toolInputText(input: unknown): string {
+  try {
+    return clipContext(JSON.stringify(input), 700);
+  } catch {
+    return '[无法序列化]';
+  }
+}
+
+function sideContextLine(event: UiEvent): string | null {
+  if (event.type === 'user.message') {
+    const attachments = event.attachments?.map((item) => item.name).join('、');
+    const text = clipContext(event.text, 2_200);
+    return `用户：${text}${attachments ? `（附件：${attachments}）` : ''}`;
+  }
+  if (event.type === 'assistant.message') {
+    const parts: string[] = [];
+    for (const block of event.blocks) {
+      if (block.type === 'text' && block.text?.trim()) {
+        parts.push(clipContext(block.text, 2_500));
+      } else if (block.type === 'tool_use' && block.name) {
+        parts.push(`[调用工具 ${block.name} ${toolInputText(block.input)}]`);
+      }
+    }
+    return parts.length > 0 ? `Claude：${parts.join('\n')}` : null;
+  }
+  if (event.type === 'tool.result') {
+    return `工具结果${event.isError ? '（错误）' : ''}：${clipContext(event.content, 900)}`;
+  }
+  return null;
+}
+
+function buildSideContext(events: UiEvent[], state?: SessionRuntimeState): string {
+  const picked: string[] = [];
+  let total = 0;
+  const active = state?.activeTools ?? [];
+  if (active.length > 0) {
+    const line = `当前执行状态：${active.map((tool) => tool.name).join('、')}（任务仍在运行）`;
+    picked.push(line);
+    total += line.length + 1;
+  }
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const line = sideContextLine(events[i]);
+    if (!line) continue;
+    if (total + line.length + 1 > SIDE_CONTEXT_MAX_CHARS) break;
+    picked.unshift(line);
+    total += line.length + 1;
+  }
+  return picked.join('\n');
+}
+
 export class SessionManager {
   private runtimes = new Map<string, ClaudeRuntime>();
   private creating = new Map<string, Promise<ClaudeRuntime>>();
@@ -169,7 +227,8 @@ export class SessionManager {
 
   /**
    * Ask a side question about the current conversation without running it
-   * through the main runtime: a forked, tool-less, non-persisted query.
+   * through the main runtime: a tool-less, non-persisted query over a compact
+   * transcript excerpt (never a resume/fork of the full session).
    */
   async sideQuestion(
     id: string,
@@ -200,11 +259,18 @@ export class SessionManager {
       fn();
     };
 
+    const contextEvents = this.transcript.readWindow(id, {
+      tail: true,
+      limit: 160,
+      compact: true,
+    });
+    const context = buildSideContext(contextEvents, runtime?.getState());
+
     const raw = startSideQuestion(
       {
         cwd: runtime?.cwd ?? meta.cwd,
-        claudeSessionId: runtime?.claudeSessionId ?? meta.claudeSessionId,
         model: runtime?.model ?? meta.model,
+        context,
       },
       clean,
       {

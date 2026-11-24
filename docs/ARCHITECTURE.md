@@ -43,10 +43,10 @@ data/
 | 位置 | 职责 |
 |---|---|
 | `server/src/runtime.ts` | 一个会话一个运行时：流式输入、消息归一化、`canUseTool`、任务/工具状态、空闲休眠 |
-| `server/src/manager.ts` | 运行时生命周期、会话导入、列表、状态合并、并发创建去重 |
+| `server/src/manager.ts` | 运行时生命周期、会话导入、列表、状态合并、并发创建去重、旁问紧凑上下文 |
 | `server/src/transcript.ts` | UI 事件持久化与窗口读取（`after` / `before` / `tail` / `compact`） |
 | `server/src/attachments.ts` | 附件落盘/元数据、大小与类型校验、图片 base64 / 文本内联解析 |
-| `server/src/sideQuestion.ts` | 旁问：fork 当前会话、禁工具、不落盘的一次性查询 |
+| `server/src/sideQuestion.ts` | 旁问：紧凑上下文、禁工具、不 resume、不落盘的一次性查询 |
 | `server/src/importHistory.ts` | Claude 原始 transcript → Web UI 事件；按 messageId 合并 chunk |
 | `server/src/ws.ts` | WebSocket 附着、快照 + 增量回放、审批与中断 |
 | `server/src/auth.ts` | 首次初始化、登录、Cookie、账号锁定 |
