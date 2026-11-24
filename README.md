@@ -41,7 +41,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 工作区配置 | 会话应该跑在哪个目录 | 环境变量 `ALLOWED_ROOTS` + `data/workspaces.json` 的额外目录/默认目录；所有 cwd 做 realpath + 白名单校验；选择器可直接新建文件夹 |
 | 命令 / 技能 / 文件引用 | 对齐 VSCode 插件的输入能力 | 从 `system/init` 读取 `slash_commands` 与 `skills`；输入 `/` 弹出命令/技能菜单；输入 `@` 通过 `rg --files` 搜索当前项目文件并插入相对路径 |
 | 图片 / 文件附件 | 截图、日志、文档不想手工转述 | 输入框支持粘贴图片、拖拽文件与文件选择；服务端落盘 `data/attachments`（0600）并以 id 引用。发送时图片转 Anthropic `image` content block，小文本文件内联，其他文件按绝对路径交给 Claude 读取；历史消息渲染缩略图/文件 chip |
-| 旁问（/btw） | 任务运行中想快速问一句，又不想打断 | 顶部「旁问」打开浮动面板；服务端用 Agent SDK 的 `resume` + `forkSession` 建一个临时、禁工具、不落盘的查询，基于当前上下文流式回答。答案不进入主对话，可取消，费用单独显示 |
+| 旁问（/btw） | 任务运行中想快速问一句，又不想打断 | 顶部「旁问」打开浮动面板（桌面右下 / 手机底部卡片）；拖动顶部把手可上下调整高度并记忆，双击还原。服务端用 Agent SDK 的 `resume` + `forkSession` 建临时、禁工具、不落盘的查询，基于当前上下文流式回答；答案不进入主对话，可取消，费用单独显示 |
 | 语音输入 | 手机/免手操作时快速输入 | 麦克风按钮直接开始/结束听写；默认整段 WebM 上传转写，也可开启实时流式边说边写。渠道在「设置 → 语音识别」配置一次。支持 Gemini 3.5 Transcribe / Live、OpenAI 兼容（官方 Realtime 或分段实时；OpenAI/Groq/SiliconFlow/本地 faster-whisper）、字节火山引擎流式 WebSocket、浏览器内置 |
 | 多端布局 / 亮暗主题 | 手机和电脑都要好用 | Vue 3 + CSS 变量 + `100dvh` + 移动端抽屉侧栏/底部输入区；亮暗两套 token；服务端默认外观（跟随系统/亮/暗）作用于登录页与新浏览器 |
 | 干净安装 | 一台 Linux 设备快速上线 | `install.sh` 默认用户级安装到 `~/.local/share/claude-web`，构建后注册 `systemd --user` 并 `enable-linger`；也支持 `--system` 安装到 `/opt` |

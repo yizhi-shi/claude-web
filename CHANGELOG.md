@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 — 2026-11-24
+
+- Side-question panel is now resizable: a top handle supports mouse and touch drag to grow it upward; desktop max ~82dvh and mobile ~78dvh, always clamped inside the viewport.
+- Height is remembered in `localStorage` (`cw.side.height`) per browser; double-click restores the content height. Keyboard `↑/↓` adjusts by 24px (48px with Shift), `Home` expands to the maximum and `End` collapses to the minimum.
+- Mobile layout is a full-width bottom sheet above the composer with a taller touch handle and safe-area offset; desktop remains the floating right-hand panel.
+- Smoke-tested with Playwright at 1280×900 and 390×844: drag growth, reload persistence, double-click reset, no horizontal/vertical overflow, and a real side question (`OK。`) on both viewports.
+
 ## 0.6.1 — 2026-11-24
 
 - Fixed `/btw` side questions failing on long or currently-running sessions with only "旁问失败，请稍后重试". The forked query now allows a second turn: the model may attempt one tool from the resumed context, get denied, and still produce an answer instead of ending with `error_max_turns`.

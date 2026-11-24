@@ -101,6 +101,129 @@ const sideBusy = ref(false);
 const sideExchanges = ref<SideExchange[]>([]);
 const sideListRef = ref<HTMLDivElement | null>(null);
 const sideInputRef = ref<HTMLTextAreaElement | null>(null);
+const sidePanelRef = ref<HTMLElement | null>(null);
+const sideHeight = ref<number | null>(null);
+const sideResizing = ref(false);
+const SIDE_HEIGHT_KEY = 'cw.side.height';
+const SIDE_HEIGHT_MIN = 220;
+let sideDrag: {
+  startY: number;
+  startHeight: number;
+  handle: HTMLElement;
+  pointerId: number;
+} | null = null;
+
+function sideHeightMax(): number {
+  if (typeof window === 'undefined') return 720;
+  return Math.max(SIDE_HEIGHT_MIN, Math.min(Math.round(window.innerHeight * 0.82), window.innerHeight - 160));
+}
+
+function clampSideHeight(value: number): number {
+  return Math.min(sideHeightMax(), Math.max(SIDE_HEIGHT_MIN, Math.round(value)));
+}
+
+function readSideHeight(): number | null {
+  try {
+    const raw = Number(window.localStorage.getItem(SIDE_HEIGHT_KEY));
+    return Number.isFinite(raw) && raw > 0 ? clampSideHeight(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSideHeight(): void {
+  try {
+    if (sideHeight.value === null) window.localStorage.removeItem(SIDE_HEIGHT_KEY);
+    else window.localStorage.setItem(SIDE_HEIGHT_KEY, String(Math.round(sideHeight.value)));
+  } catch {
+    // localStorage can be unavailable in private mode
+  }
+}
+
+function onSideResizeMove(event: PointerEvent): void {
+  if (!sideDrag) return;
+  sideHeight.value = clampSideHeight(
+    sideDrag.startHeight + sideDrag.startY - event.clientY,
+  );
+}
+
+function finishSideResize(): void {
+  if (!sideDrag) return;
+  const { handle, pointerId } = sideDrag;
+  try {
+    if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId);
+  } catch {
+    // pointer capture may already be gone
+  }
+  sideDrag = null;
+  sideResizing.value = false;
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  window.removeEventListener('pointermove', onSideResizeMove);
+  window.removeEventListener('pointerup', finishSideResize);
+  window.removeEventListener('pointercancel', finishSideResize);
+  persistSideHeight();
+}
+
+function startSideResize(event: PointerEvent): void {
+  if (event.button !== 0 || !sidePanelRef.value) return;
+  const panel = sidePanelRef.value;
+  const handle = event.currentTarget as HTMLElement;
+  event.preventDefault();
+  sideDrag = {
+    startY: event.clientY,
+    startHeight: panel.getBoundingClientRect().height,
+    handle,
+    pointerId: event.pointerId,
+  };
+  sideResizing.value = true;
+  sideHeight.value = clampSideHeight(sideDrag.startHeight);
+  try {
+    handle.setPointerCapture?.(event.pointerId);
+  } catch {
+    // ignore
+  }
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'ns-resize';
+  window.addEventListener('pointermove', onSideResizeMove);
+  window.addEventListener('pointerup', finishSideResize);
+  window.addEventListener('pointercancel', finishSideResize);
+}
+
+function onSideResizeKey(event: KeyboardEvent): void {
+  const step = event.shiftKey ? 48 : 24;
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    sideHeight.value = clampSideHeight((sideHeight.value ?? sidePanelRef.value?.getBoundingClientRect().height ?? 320) + step);
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    sideHeight.value = clampSideHeight((sideHeight.value ?? sidePanelRef.value?.getBoundingClientRect().height ?? 320) - step);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    sideHeight.value = sideHeightMax();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    sideHeight.value = SIDE_HEIGHT_MIN;
+  } else {
+    return;
+  }
+  persistSideHeight();
+}
+
+function resetSideHeight(): void {
+  sideHeight.value = null;
+  persistSideHeight();
+}
+
+const sidePanelStyle = computed(() =>
+  sideHeight.value === null ? undefined : { height: `${sideHeight.value}px` },
+);
+
+function onSideWindowResize(): void {
+  if (sideHeight.value !== null) {
+    sideHeight.value = clampSideHeight(sideHeight.value);
+  }
+}
 
 function clearStopTimers(): void {
   if (stopSlowTimer) {
@@ -1334,6 +1457,8 @@ function onVisibility(): void {
 
 onMounted(async () => {
   mounted = true;
+  sideHeight.value = readSideHeight();
+  window.addEventListener('resize', onSideWindowResize);
   clockTimer = window.setInterval(() => (now.value = Date.now()), 1000);
   document.addEventListener('visibilitychange', onVisibility);
   if (typeof ResizeObserver !== 'undefined' && threadEl.value) {
@@ -1347,6 +1472,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   mounted = false;
+  finishSideResize();
+  window.removeEventListener('resize', onSideWindowResize);
   cleanupSocket();
   if (reconnectTimer) window.clearTimeout(reconnectTimer);
   if (fileTimer) window.clearTimeout(fileTimer);
@@ -1667,7 +1794,26 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <aside v-if="sideOpen" class="side-panel">
+      <aside
+        v-if="sideOpen"
+        ref="sidePanelRef"
+        class="side-panel"
+        :class="{ resizing: sideResizing }"
+        :style="sidePanelStyle"
+      >
+        <div
+          class="side-resize-handle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="调整旁问高度"
+          tabindex="0"
+          title="拖动调整高度，双击还原"
+          @pointerdown="startSideResize"
+          @keydown="onSideResizeKey"
+          @dblclick="resetSideHeight"
+        >
+          <span class="side-resize-grip" />
+        </div>
         <header class="side-head">
           <span class="side-title"><Icon name="spark" :size="14" />旁问</span>
           <span class="side-note">当前上下文 · 不写入主对话</span>
