@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 — 2026-11-24
+
+- Fixed `/btw` side questions failing on long or currently-running sessions with only "旁问失败，请稍后重试". The forked query now allows a second turn: the model may attempt one tool from the resumed context, get denied, and still produce an answer instead of ending with `error_max_turns`.
+- Preserve partial answer text if the side query ends with an error after streaming; surface the underlying `errors` text and translate turn/context-limit errors into actionable messages.
+- Report side-question cost from `model_usage_since_last_result` instead of cumulative `total_cost_usd`, so a resumed long session no longer shows its whole-history cost on one side question.
+- Added `scripts/restart-service.sh`: builds and restarts the user service safely, refuses to restart from inside the service cgroup (which kills the current conversation), and supports `--defer N` through a transient user unit.
+- Verified against the exact large active session that previously returned `error_max_turns`: the fixed forked query returns `OK。` and reports a per-turn cost.
+
 ## 0.6.0 — 2026-11-24
 
 - Interactive questions: `AskUserQuestion` now renders a native question panel instead of being auto-allowed with "未回答". Single-select, multi-select, option descriptions/previews, a free-text answer, skip, and per-question timeout are supported.

@@ -107,6 +107,8 @@ sudo ./install.sh --system --dir /opt/claude-web --user "$SUDO_USER"
 ```bash
 systemctl --user status claude-web
 journalctl --user -u claude-web -f
+# 从服务之外的终端/Claude Code 窗口构建并重启；脚本会拒绝在服务托管的会话里直接重启
+./scripts/restart-service.sh --build
 ```
 
 卸载（保留数据）：

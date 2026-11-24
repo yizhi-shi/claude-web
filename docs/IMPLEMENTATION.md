@@ -137,9 +137,11 @@ GET /api/fs/search?cwd=<cwd>&q=<query>
 
 - 入口：会话头部的「旁问」打开浮动面板；同一时间只跑一个前端请求，面板保留本次页面内的问答历史。
 - 协议：WS `side.question {requestId, text}` → `side.started` / `side.delta` / `side.done` / `side.error`；`side.cancel {requestId}` 取消。旁问事件不是 `UiEvent`，不写 transcript，也不广播给其他标签页。
-- 实现：`server/src/sideQuestion.ts` 用 `query()` 开一个独立查询：`resume=<claudeSessionId>` + `forkSession: true` + `persistSession: false`；`tools: []`，`canUseTool` 一律 deny，`maxTurns: 1`，system prompt 追加“一次性、只依据上下文、不能调用工具”。主 runtime、主输入队列、主 transcript 都不参与。
+- 实现：`server/src/sideQuestion.ts` 用 `query()` 开一个独立查询：`resume=<claudeSessionId>` + `forkSession: true` + `persistSession: false`；`tools: []`，`canUseTool` 一律 deny，`maxTurns: 2`，system prompt 追加“一次性、只依据上下文、不能调用工具”。主 runtime、主输入队列、主 transcript 都不参与。
+- 为什么是 2 而不是 1：主会话正在执行工具时，fork 的上下文里可能带着未完成的工具调用；模型会先尝试再调一次工具（被 deny），`maxTurns: 1` 会直接以 `error_max_turns` 结束且没有正文，前端只看到“旁问失败”。允许第二回合后模型能拿到拒绝结果并正常作答。
+- 错误与费用：`result.is_error` 但已有正文时按部分答案返回；错误信息会带 `errors` 并翻译 `error_max_turns` / 上下文过长；`total_cost_usd` 在 resume 会话上是累计值，旁问显示改用 `model_usage_since_last_result` 的单回合费用，避免把主会话历史费用算进来。
 - 并发与清理：每会话最多 2 个旁问；socket 断开、重新 attach、会话 stop、服务 shutdown 都会取消；5 分钟超时。
-- 限制：fork 读取的是已落盘的 Claude transcript，主回合正在流式输出、尚未落盘的片段可能缺失；旁问历史只在浏览器内存中，刷新后不保留；旁问费用单独显示，不计入主会话 `costUsd`。
+- 限制：fork 读取的是已落盘的 Claude transcript，主回合正在流式输出、尚未落盘的片段可能缺失；超大历史会话的 fork 仍会携带大量上下文，慢且费用高；旁问历史只在浏览器内存中，刷新后不保留；旁问费用单独显示，不计入主会话 `costUsd`。
 
 ### 历史分页、排队消息与运行中追加
 

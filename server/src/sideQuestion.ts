@@ -50,8 +50,39 @@ interface RawMessage {
   message?: { content?: unknown };
   result?: unknown;
   is_error?: boolean;
+  errors?: unknown;
   total_cost_usd?: number;
+  model_usage_since_last_result?: Record<string, { costUSD?: number }>;
   duration_ms?: number;
+}
+
+function costFromResult(raw: RawMessage): number | undefined {
+  // `total_cost_usd` on a resumed/forked session is cumulative for the whole
+  // session, which can be thousands of dollars for a long-running main turn.
+  // The per-turn usage map is the cost of this side question only.
+  const perTurn = raw.model_usage_since_last_result;
+  if (perTurn && typeof perTurn === 'object') {
+    let sum = 0;
+    let found = false;
+    for (const usage of Object.values(perTurn)) {
+      if (typeof usage?.costUSD === 'number' && Number.isFinite(usage.costUSD)) {
+        sum += usage.costUSD;
+        found = true;
+      }
+    }
+    if (found) return sum;
+  }
+  return typeof raw.total_cost_usd === 'number' ? raw.total_cost_usd : undefined;
+}
+
+function friendlySideError(detail: string): string {
+  if (/maximum number of turns/i.test(detail)) {
+    return '旁问被主任务的工具调用打断，请稍后重试。';
+  }
+  if (/prompt is too long|context length|context window|too many tokens|maximum context/i.test(detail)) {
+    return '旁问上下文过长，请稍后重试或新建会话再问。';
+  }
+  return detail;
 }
 
 function textFromBlocks(content: unknown): string {
@@ -115,7 +146,11 @@ export function startSideQuestion(
         decisionReason: { type: 'other', reason: 'side_question' },
       }),
       permissionMode: 'default',
-      maxTurns: 1,
+      // A resumed conversation can contain an unfinished tool call. The model
+      // may try one more tool even though `tools: []`; allow a second turn so
+      // it can answer after the denied call instead of ending with
+      // error_max_turns and an empty result.
+      maxTurns: 2,
       abortController,
       env: childEnv(),
       ...(options.model ? { model: options.model } : {}),
@@ -159,21 +194,39 @@ export function startSideQuestion(
         }
 
         if (raw.type === 'result') {
+          const resultText = typeof raw.result === 'string' ? raw.result.trim() : '';
           if (raw.is_error) {
-            const detail =
-              typeof raw.result === 'string' && raw.result.trim()
-                ? raw.result
-                : '旁问失败，请稍后重试';
+            // A resumed session may have ended on a tool attempt after the
+            // model already produced useful text. Keep that text rather than
+            // turning a partial answer into a total failure.
+            if (answer.trim()) {
+              settle(() =>
+                callbacks.onDone({
+                  answer,
+                  costUsd: costFromResult(raw),
+                  durationMs:
+                    typeof raw.duration_ms === 'number' ? raw.duration_ms : undefined,
+                  model: options.model,
+                }),
+              );
+              return;
+            }
+            const errors = Array.isArray(raw.errors)
+              ? raw.errors.filter((item): item is string => typeof item === 'string').join('；')
+              : '';
+            const detail = friendlySideError(resultText || errors || '旁问失败，请稍后重试');
             settle(() => callbacks.onError(detail));
             return;
           }
-          const finalAnswer =
-            answer || (typeof raw.result === 'string' ? raw.result : '');
+          const finalAnswer = answer || resultText;
+          if (!finalAnswer.trim()) {
+            settle(() => callbacks.onError('旁问没有返回内容，请重试'));
+            return;
+          }
           settle(() =>
             callbacks.onDone({
               answer: finalAnswer,
-              costUsd:
-                typeof raw.total_cost_usd === 'number' ? raw.total_cost_usd : undefined,
+              costUsd: costFromResult(raw),
               durationMs:
                 typeof raw.duration_ms === 'number' ? raw.duration_ms : undefined,
               model: options.model,
@@ -182,7 +235,11 @@ export function startSideQuestion(
           return;
         }
       }
-      settle(() => callbacks.onDone({ answer, model: options.model }));
+      if (answer.trim()) {
+        settle(() => callbacks.onDone({ answer, model: options.model }));
+      } else {
+        settle(() => callbacks.onError('旁问没有返回内容，请重试'));
+      }
     } catch (error) {
       if (timedOut) {
         settle(() => callbacks.onError('旁问超时，请稍后重试'));
