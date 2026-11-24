@@ -24,7 +24,7 @@ let pollTimer: number | undefined;
 
 const activeId = computed(() => (route.params.id as string | undefined) ?? '');
 const visibleSessions = computed(() => sessions.value.slice(0, 60));
-const version = computed(() => appConfig.value?.versions.claudeWeb ?? '0.2.0');
+const version = computed(() => appConfig.value?.versions.claudeWeb ?? '0.7.1');
 
 function isActive(id: string): boolean {
   return activeId.value === id;

@@ -34,5 +34,9 @@ Include:
 - Path allowlist with realpath validation for workspace access.
 - Permission timeout and explicit stop semantics.
 - Voice keys are masked in API responses and stored server-side only.
-- Attachments are stored under `data/attachments/` with generated names and `0600` permissions; upload/download both require the session cookie. Non-image files are served as `application/octet-stream` attachments, SVG is never forwarded as an image block, and per-file/count/total size limits are enforced server-side.
+- Attachments are stored under `data/attachments/<sessionId>/` with server-generated random names and `0600` permissions; upload/download both require the session cookie and attachment ids are scoped to their session. Client-supplied paths are never used.
+- Attachment uploads enforce strict base64 decoding, a MIME syntax check, a display-name basename/sanitization pass, generated disk names, and per-file/count/total size limits server-side. Sidecar metadata is re-validated on every read.
+- Only PNG/JPEG/GIF/WebP are treated as images (SVG is deliberately excluded). Non-image files are forced to `application/octet-stream` + `Content-Disposition: attachment`; images use inline disposition with a whitelisted MIME. CSP + `nosniff` further reduce same-origin script execution risk.
+- The Fastify request body limit is 18 MB; attachment limits should be kept below it after base64 expansion. Reverse proxies must set a compatible `client_max_body_size`.
+- Uploaded files are not virus-scanned and their content enters the model context; treat attachments as untrusted input.
 - Side questions run as a forked, non-persisted query with tools removed and every tool request denied; they do not write to the main transcript and are canceled when the requesting socket or session stops.

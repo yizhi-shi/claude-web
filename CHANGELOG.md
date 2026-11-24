@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-11-24
+
+- Documentation release for the attachment pipeline: added `docs/ATTACHMENTS.md` covering browser file picker/paste/drag → upload API → `data/attachments` storage → attachment ids on send → `AttachmentStore.resolve()` → `buildUserContent()` text/image blocks → Agent SDK/CLI reception → authenticated history replay.
+- Documented upload/send payloads, per-file + total limits, inline-text budgets, image MIME allowlist, SVG/non-image forced-download behavior, path-traversal and XSS mitigations, orphan-file cleanup gap, and reverse-proxy/body-limit constraints.
+- README now lists the attachment limits and links the new document; SECURITY, DEPLOYMENT, ARCHITECTURE, IMPLEMENTATION and UI-DESIGN cross-link the canonical attachment flow.
+
 ## 0.7.0 — 2026-11-24
 
 - Side-question panel is now resizable: a top handle supports mouse and touch drag to grow it upward; desktop max ~82dvh and mobile ~78dvh, always clamped inside the viewport.

@@ -3,7 +3,7 @@
 > 状态: current
 > 最后核对: 2026-11-24
 > 事实源: `server/src/`、`web/src/`、`agent-python` 无关；Claude Code CLI 与 Agent SDK 的运行时契约以本机 `claude --version` 和 `@anthropic-ai/claude-agent-sdk` 类型为准
-> 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [Roadmap](ROADMAP.md)
+> 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [附件](ATTACHMENTS.md) · [Roadmap](ROADMAP.md)
 
 ## 一句话
 
@@ -126,6 +126,22 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 ```
 
 实时链路与整段转写共用同一份 `data/voice.json` 配置；实时不可用时前端自动回退整段转写。详见 [语音渠道](VOICE-ASR.md)。
+
+## 附件链路
+
+```text
+浏览器 File/粘贴/拖拽
+  → POST /api/sessions/:id/attachments（JSON base64）
+  → data/attachments/<sessionId>/<uuid>.<ext> + <uuid>.json（0600）
+  → 输入区 chip（只持有附件 id）
+  → 发送：WS/HTTP user.message { text, attachments: [id] }
+  → AttachmentStore.resolve()：图片 base64 / 小文本内联 / 其他文件绝对路径
+  → ClaudeRuntime.buildUserContent()：text block + image block
+  → Agent SDK 流式输入 → Claude Code
+  → transcript 只写附件描述；历史经鉴权附件 URL 回放
+```
+
+附件按会话隔离，磁盘名由服务端随机生成；客户端永远不传路径。图片只允许 PNG/JPEG/GIF/WebP，SVG 作为普通文件强制下载。详见 [附件链路](ATTACHMENTS.md)。
 
 ## 安全边界
 

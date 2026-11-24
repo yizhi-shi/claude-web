@@ -177,7 +177,10 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 |---|---|---|
 | `PORT` | `8010` | 监听端口 |
 | `HOST` | `0.0.0.0` | 监听地址 |
-| `DATA_DIR` | `./data` | 账号、会话索引、transcript、语音配置 |
+| `DATA_DIR` | `./data` | 账号、会话索引、transcript、附件、语音配置 |
+| `MAX_ATTACHMENTS` | `5` | 单条消息最多附件数 |
+| `MAX_ATTACHMENT_MB` | `10` | 单个附件最大 MB；base64 后约膨胀 1/3 |
+| `MAX_TOTAL_ATTACHMENT_MB` | `20` | 单条消息附件总大小 |
 | `ALLOWED_ROOTS` | 用户 home | 允许作为工作区的根目录，逗号分隔 |
 | `DEFAULT_WORKSPACE` | 第一个允许根目录 | 新建会话的默认目录（必须在允许范围内） |
 | `DEFAULT_PERMISSION_MODE` | `default` | 新会话默认权限；个人可信设备可用 `bypassPermissions` |
@@ -213,6 +216,16 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 `VOICE_PROXY_URL` 可让服务端经本地代理访问上述语音服务。实时识别失败或未配置时会回退到整段转写；停止听写后只接收最后一版定稿，迟到的 partial 不会继续改写输入框。输入区现在把命令/文件/语音与停止/发送放在同一行，运行中的「停止」在状态条和输入区都可直接点到，停止后立即显示“停止中…”，超过 2.5 秒还会给出强制结束入口。
 
 未配置渠道时，点击麦克风只会提示去设置页，不会请求麦克风权限。整段转写模式按点击开始/结束，整段上传后转写并插入光标；端到端延迟取决于录音长度和渠道，短句通常 2–5 秒。浏览器麦克风只在 HTTPS 或 `localhost` 下可用；公网部署请使用 HTTPS。
+
+### 附件
+
+输入框支持三种方式添加附件：点「附件」选择文件、直接粘贴图片/文件、把文件拖进聊天页。文件先上传到服务端 `data/attachments/<sessionId>/`，发送消息时只传附件 id；服务端校验归属与大小后，把附件转成模型可消费的内容：
+
+- 图片（PNG/JPEG/GIF/WebP）→ Anthropic `image` content block，模型直接看到；
+- 小文本文件（≤64 KB，单条消息总内联预算 128 KB）→ 内联进 `text` block，即使 Read 被拒绝模型也能读到；
+- 其他文件 → 在消息里给出绝对路径，Claude 按需用 Read 工具读取。
+
+transcript 只保存附件的 `id/name/mimeType/size/kind`，不保存文件字节；刷新后图片通过带登录 Cookie 的附件接口回放，非图片强制下载。单条最多 5 个、单文件默认 10 MB、总计 20 MB，可在环境变量里调整。完整链路、存储格式、安全边界和限制见 [附件链路](docs/ATTACHMENTS.md)。
 
 ---
 
@@ -260,6 +273,7 @@ curl -fsS http://127.0.0.1:8010/api/health
 - [Roadmap](docs/ROADMAP.md)
 - [VSCode 插件能力对照](docs/FEATURE-PARITY.md)
 - [语音渠道调研与配置](docs/VOICE-ASR.md)
+- [附件链路：Web 上传到 Claude Code](docs/ATTACHMENTS.md)
 - [同类项目调研与取舍](docs/COMPETITIVE-RESEARCH.md)
 - [UI 布局与交互决策](docs/UI-DESIGN.md)
 

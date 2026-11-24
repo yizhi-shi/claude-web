@@ -1,7 +1,7 @@
 # 核心实现说明（SDK 宿主 + Web 视图层）
 
 > 状态: current
-> 最后核对: 2026-11-23
+> 最后核对: 2026-11-24
 > 事实源: `server/src/runtime.ts`、`ws.ts`、`http.ts`、`web/src/views/Chat.vue`、Claude Code CLI / Agent SDK 控制协议
 > 关联: [架构](ARCHITECTURE.md) · [VSCode 对照](FEATURE-PARITY.md) · [语音](VOICE-ASR.md)
 
@@ -126,22 +126,25 @@ GET /api/fs/search?cwd=<cwd>&q=<query>
 
 ### 附件与图片
 
+> 完整的请求/响应、content block、存储与安全边界见 [附件链路](ATTACHMENTS.md)。本节只保留实现摘要。
+
 - 输入入口：工具栏「附件」选择文件、输入框粘贴（剪贴板文件）、在聊天页拖拽文件；三者都调用同一个 `addFiles()`。
 - 上传：`POST /api/sessions/:id/attachments`（JSON base64）→ `data/attachments/<sessionId>/<uuid>.<ext>`，同时写一份同名 `.json` 元数据；目录 0700、文件 0600。服务端校验 base64、MIME、单文件大小与文件名（只保留 basename）。
 - 发送：WS `user.message` / HTTP messages 增加 `attachments: [id]`。服务端只接受当前会话已上传的 id，重新校验数量与总大小，再交给 `ClaudeRuntime`。
 - 进入模型：图片 → Messages API `image` content block（base64，png/jpeg/gif/webp）；≤64KB 的文本类文件 → 内联进 text block；其余文件 → 绝对路径清单，由 Claude 按需用 Read 工具读取。`user.message` 事件只存附件描述（id/name/mime/size/kind），不存文件字节。
 - 历史渲染：图片经 `GET /api/sessions/:id/attachments/:attachmentId`（Cookie 鉴权、`private, immutable` 缓存）加载；非图片强制 `application/octet-stream` + `Content-Disposition: attachment`，避免同源 HTML/SVG 被执行。SVG 不作为 image block 发送。
-- 限制：`MAX_ATTACHMENTS`（默认 5）、`MAX_ATTACHMENT_MB`（默认 10）、`MAX_TOTAL_ATTACHMENT_MB`（默认 20）；客户端先做一次同样的检查，服务端为准。
+- 限制：`MAX_ATTACHMENTS`（默认 5）、`MAX_ATTACHMENT_MB`（默认 10）、`MAX_TOTAL_ATTACHMENT_MB`（默认 20）；客户端先做一次同样的检查，服务端为准。Fastify `bodyLimit` 固定 18 MB，base64 膨胀后仍要能通过。
+- 失败语义：`manager.send()` 先 `AttachmentStore.resolve()` 再 `ensureRuntime()`，坏附件不会拉起 CLI；上传成功的文件不会因为移除 chip 自动删除（清理策略在 Roadmap）。
 
 ### 旁问（/btw）
 
 - 入口：会话头部的「旁问」打开浮动面板；同一时间只跑一个前端请求，面板保留本次页面内的问答历史。
 - 协议：WS `side.question {requestId, text}` → `side.started` / `side.delta` / `side.done` / `side.error`；`side.cancel {requestId}` 取消。旁问事件不是 `UiEvent`，不写 transcript，也不广播给其他标签页。
-- 实现：`server/src/sideQuestion.ts` 用 `query()` 开一个独立查询：`resume=<claudeSessionId>` + `forkSession: true` + `persistSession: false`；`tools: []`，`canUseTool` 一律 deny，`maxTurns: 2`，system prompt 追加“一次性、只依据上下文、不能调用工具”。主 runtime、主输入队列、主 transcript 都不参与。
-- 为什么是 2 而不是 1：主会话正在执行工具时，fork 的上下文里可能带着未完成的工具调用；模型会先尝试再调一次工具（被 deny），`maxTurns: 1` 会直接以 `error_max_turns` 结束且没有正文，前端只看到“旁问失败”。允许第二回合后模型能拿到拒绝结果并正常作答。
-- 错误与费用：`result.is_error` 但已有正文时按部分答案返回；错误信息会带 `errors` 并翻译 `error_max_turns` / 上下文过长；`total_cost_usd` 在 resume 会话上是累计值，旁问显示改用 `model_usage_since_last_result` 的单回合费用，避免把主会话历史费用算进来。
+- 实现：`manager.sideQuestion()` 从最近 160 条可渲染 UI 事件生成最多 24k 字符的紧凑上下文（用户消息、assistant 文本、工具名/输入摘要、工具结果摘要，以及运行中的工具状态），把它放进 `<conversation>` 标签，再交给 `server/src/sideQuestion.ts`。旁问查询**不 resume、不 fork 主会话**，而是新建 `persistSession: false` 的一次性查询：`tools: []`、`strictMcpConfig: true`、`canUseTool` 一律 deny、`maxTurns: 2`、自定义只读 system prompt。主 runtime、主输入队列、主 transcript 都不参与。
+- 为什么不再 fork：fork 会把主会话的完整历史和未完成的工具调用带进旁问。模型容易继续调工具（被 deny 后仍可能重试），`maxTurns` 很快耗尽，且 30MB+ 的会话会带来巨大 token 成本。紧凑上下文把旁问限制在“读最近发生了什么”，与主任务隔离，也避免与运行中的 Claude 会话争锁。
+- 上下文边界：只取最近事件，主回合正在流式输出且尚未落盘的 token 不在上下文里；工具输出会截断到约 900 字符；更早的历史可能缺失。需要完整历史时应回主对话查看。
+- 错误与费用：`result.is_error` 但已有正文时按部分答案返回；错误信息会带 `errors` 并翻译 `error_max_turns` / 上下文过长；费用使用 `model_usage_since_last_result` 的单回合费用，不计入主会话 `costUsd`。
 - 并发与清理：每会话最多 2 个旁问；socket 断开、重新 attach、会话 stop、服务 shutdown 都会取消；5 分钟超时。
-- 限制：fork 读取的是已落盘的 Claude transcript，主回合正在流式输出、尚未落盘的片段可能缺失；超大历史会话的 fork 仍会携带大量上下文，慢且费用高；旁问历史只在浏览器内存中，刷新后不保留；旁问费用单独显示，不计入主会话 `costUsd`。
 
 ### 历史分页、排队消息与运行中追加
 
