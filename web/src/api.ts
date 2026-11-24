@@ -1,6 +1,7 @@
 import type {
   AppConfig,
   AttachmentRef,
+  ContextUsage,
   DirListing,
   PermissionDecision,
   PermissionMode,
@@ -155,6 +156,10 @@ export const api = {
       `/api/sessions/${encodeURIComponent(id)}/events?${params.toString()}`,
     );
   },
+  contextUsage: (id: string) =>
+    request<{ contextUsage?: ContextUsage }>(
+      `/api/sessions/${encodeURIComponent(id)}/context`,
+    ),
   stopSession: (id: string) =>
     request<SessionRuntimeState>(`/api/sessions/${encodeURIComponent(id)}/stop`, {
       method: 'POST',

@@ -435,6 +435,16 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     return { events, state: manager.state(id), lastSeq, firstSeq, hasMore };
   });
 
+  authed(app, 'GET', '/api/sessions/:id/context', async (req) => {
+    const { id } = req.params as { id: string };
+    await manager.ensureTranscript(id);
+    const runtime = manager.runtime(id);
+    const contextUsage = runtime
+      ? await runtime.refreshContextUsage()
+      : manager.state(id).contextUsage;
+    return { contextUsage };
+  });
+
   authed(app, 'POST', '/api/sessions/:id/attachments', async (req) => {
     const { id } = req.params as { id: string };
     await manager.ensureTranscript(id);

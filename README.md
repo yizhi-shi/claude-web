@@ -39,7 +39,8 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 历史分页 / 排队消息 | 刷新后历史不能丢；排队发送要看得见 | 历史查询带 `compact=1`，过滤 token 级 `assistant.delta`，按消息级事件分页；滚到顶部自动加载更早。运行中发送的消息立即入 transcript，`user.message` 带 `queued`；回合边界发 `user.message.delivered`，停止时发 `user.message.failed`，输入区显示排队 chip |
 | 实时执行状态 | 知道现在在跑什么、跑了多久 | 从 `tool_use` / `tool_result` / `tool_progress` / task 事件维护活动工具列表；展示当前工具、耗时、后台子任务、上下文占用、费用和压缩状态 |
 | 工作区配置 | 会话应该跑在哪个目录 | 环境变量 `ALLOWED_ROOTS` + `data/workspaces.json` 的额外目录/默认目录；所有 cwd 做 realpath + 白名单校验；选择器可直接新建文件夹 |
-| 命令 / 技能 / 文件引用 | 对齐 VSCode 插件的输入能力 | 从 `system/init` 读取 `slash_commands` 与 `skills`；输入 `/` 弹出命令/技能菜单；输入 `@` 通过 `rg --files` 搜索当前项目文件并插入相对路径 |
+| 命令 / 技能 / 文件引用 | 对齐 VSCode 插件的输入能力 | 从 `system/init` 读取 `slash_commands` 与 `skills`；输入 `/` 弹出命令/技能菜单；输入 `@` 通过 `rg --files` 搜索当前项目文件并插入相对路径。`/model`、`/context`、`/usage`、`/status`、`/permissions`、`/config`、`/help` 由 Web 原生面板处理，其余命令交给 CLI |
+| 系统配置命令适配 | CLI 的配置命令输出不要伪装成 Claude 回复 | `/model` 等由 Web 原生面板处理；`model: "<synthetic>"` 的 assistant 消息渲染为「系统」通知，隐藏 `<synthetic>` 模型 chip；`No response requested.` 等空系统消息不占对话 |
 | 图片 / 文件附件 | 截图、日志、文档不想手工转述 | 输入框支持粘贴图片、拖拽文件与文件选择；服务端落盘 `data/attachments`（0600）并以 id 引用。发送时图片转 Anthropic `image` content block，小文本文件内联，其他文件按绝对路径交给 Claude 读取；历史消息渲染缩略图/文件 chip |
 | 旁问（/btw） | 任务运行中想快速问一句，又不想打断 | 顶部「旁问」打开浮动面板（桌面右下 / 手机底部卡片）；拖动顶部把手可上下调整高度并记忆，双击还原。服务端从最近可渲染事件生成紧凑上下文，建临时、禁工具、不落盘、不 resume 的查询，基于当前上下文流式回答；答案不进入主对话，可取消，费用单独显示 |
 | 语音输入 | 手机/免手操作时快速输入 | 麦克风按钮直接开始/结束听写；默认整段 WebM 上传转写，也可开启实时流式边说边写。渠道在「设置 → 语音识别」配置一次。支持 Gemini 3.5 Transcribe / Live、OpenAI 兼容（官方 Realtime 或分段实时；OpenAI/Groq/SiliconFlow/本地 faster-whisper）、字节火山引擎流式 WebSocket、浏览器内置 |
@@ -226,6 +227,22 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 - 其他文件 → 在消息里给出绝对路径，Claude 按需用 Read 工具读取。
 
 transcript 只保存附件的 `id/name/mimeType/size/kind`，不保存文件字节；刷新后图片通过带登录 Cookie 的附件接口回放，非图片强制下载。单条最多 5 个、单文件默认 10 MB、总计 20 MB，可在环境变量里调整。完整链路、存储格式、安全边界和限制见 [附件链路](docs/ATTACHMENTS.md)。
+
+### Web 原生命令
+
+CLI 的 `/model` 在终端里通常只返回一段 `Current model: … Available: …` 的 synthetic 文本；Web 控制台把这些系统配置命令改为原生 UI：
+
+| 命令 | Web 行为 |
+|---|---|
+| `/model` | 打开模型面板：当前模型、Sonnet/Opus/Haiku/Fable/Best/1M/Opus Plan 预设和自定义模型 ID |
+| `/model <name>` | 直接切换模型；`/model default` 恢复默认 |
+| `/context` | 打开状态面板并刷新上下文用量（总量、百分比、分类） |
+| `/usage` / `/status` | 查看会话状态、模型、权限、目录、费用、上下文 |
+| `/permissions` | 打开权限模式选择 |
+| `/config` | 打开 Web 会话设置（模型/权限/状态） |
+| `/help` | 打开 Web 命令帮助 |
+
+这些命令不会发送给 CLI，也不会产生 `<synthetic>` 对话。输入完整命令名后按 Enter 会直接执行；只输入前缀时 Enter 仍从菜单补全。其他 `/命令` 和 Skill 继续交给 Claude Code；CLI 返回的 `<synthetic>` 系统消息会渲染成「系统」通知，不再伪装成 Claude 回复。
 
 ---
 

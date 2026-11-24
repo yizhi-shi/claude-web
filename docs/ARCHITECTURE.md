@@ -53,7 +53,7 @@ data/
 | `server/src/workspaces.ts` | 允许目录/默认目录的持久化与校验 |
 | `server/src/voice.ts` | 语音渠道注册、整段转写、实时渠道配置与可用性 |
 | `server/src/voiceLive.ts` | Gemini Live、OpenAI Realtime/分段、火山引擎流式会话 |
-| `web/src/views/Chat.vue` | 事件合并、流式渲染、审批面板、命令/文件/附件/旁问/语音输入 |
+| `web/src/views/Chat.vue` | 事件合并、流式渲染、审批面板、命令/文件/附件/旁问/语音输入、Web 原生系统命令与会话设置 |
 
 ## 会话生命周期
 

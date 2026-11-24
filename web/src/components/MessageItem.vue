@@ -20,6 +20,12 @@ const assistantText = computed(() => {
   const blocks = item.blocks.filter((block) => block.type === 'text').map((block) => block.text ?? '');
   return blocks.join('\n\n') || item.streamingText;
 });
+const synthetic = computed(() => assistant.value?.model === '<synthetic>');
+const hiddenSynthetic = computed(() => {
+  if (!synthetic.value) return false;
+  const text = assistantText.value.trim();
+  return !text || /^No response requested\.?$/i.test(text);
+});
 function onThinkingScroll(): void {
   const el = thinkingEl.value;
   if (!el) return;
@@ -112,11 +118,13 @@ async function copyText(): Promise<void> {
     <span class="msg-time">{{ formatClock(item.ts) }}</span>
   </div>
 
-  <div v-else-if="item.kind === 'assistant'" class="msg msg-assistant">
+  <div v-else-if="item.kind === 'assistant' && !hiddenSynthetic" class="msg msg-assistant" :class="{ synthetic }">
     <div class="assistant-head">
-      <span class="assistant-avatar"><Icon name="brand" :size="20" /></span>
-      <span class="assistant-name">Claude</span>
-      <span v-if="item.model" class="assistant-model">{{ item.model }}</span>
+      <span class="assistant-avatar" :class="{ system: synthetic }">
+        <Icon :name="synthetic ? 'info' : 'brand'" :size="20" />
+      </span>
+      <span class="assistant-name">{{ synthetic ? '系统' : 'Claude' }}</span>
+      <span v-if="item.model && !synthetic" class="assistant-model">{{ item.model }}</span>
       <span class="assistant-spacer" />
       <span class="msg-time">{{ formatClock(item.ts) }}</span>
       <button

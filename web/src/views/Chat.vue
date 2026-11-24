@@ -65,6 +65,11 @@ const now = ref(Date.now());
 const settingsOpen = ref(false);
 const settingsModel = ref('');
 const modeBusy = ref(false);
+const modelBusy = ref(false);
+type SettingsTab = 'model' | 'permission' | 'info';
+const settingsTab = ref<SettingsTab>('model');
+const contextRefreshing = ref(false);
+const helpOpen = ref(false);
 const stopping = ref(false);
 const stopSlow = ref(false);
 let stopSlowTimer: number | undefined;
@@ -256,14 +261,52 @@ const tokenStart = ref(0);
 const fileSuggestions = ref<string[]>([]);
 const menuLoading = ref(false);
 
+interface WebCommandInfo {
+  name: string;
+  usage: string;
+  description: string;
+}
+
+/** Commands handled by the Web UI instead of being sent to the CLI. */
+const webCommands: WebCommandInfo[] = [
+  { name: 'model', usage: '/model [name]', description: '打开模型选择，或直接切换模型' },
+  { name: 'context', usage: '/context', description: '打开上下文用量面板' },
+  { name: 'usage', usage: '/usage', description: '查看会话用量、费用与上下文' },
+  { name: 'status', usage: '/status', description: '查看会话状态与运行信息' },
+  { name: 'permissions', usage: '/permissions', description: '切换权限模式' },
+  { name: 'config', usage: '/config', description: '打开 Web 会话设置' },
+  { name: 'help', usage: '/help', description: '查看 Web 命令帮助' },
+];
+const webCommandNames = new Set(webCommands.map((command) => command.name));
+const modelPresets = [
+  { value: 'default', label: '默认', hint: 'CLI 默认模型' },
+  { value: 'best', label: 'Best', hint: '最佳可用模型' },
+  { value: 'sonnet', label: 'Sonnet', hint: 'sonnet' },
+  { value: 'opus', label: 'Opus', hint: 'opus' },
+  { value: 'haiku', label: 'Haiku', hint: 'haiku' },
+  { value: 'fable', label: 'Fable', hint: 'fable' },
+  { value: 'sonnet[1m]', label: 'Sonnet 1M', hint: '1M 上下文' },
+  { value: 'opus[1m]', label: 'Opus 1M', hint: '1M 上下文' },
+  { value: 'fable[1m]', label: 'Fable 1M', hint: '1M 上下文' },
+  { value: 'opusplan', label: 'Opus Plan', hint: '规划模式' },
+];
+const settingsTabs: Array<{ value: SettingsTab; label: string }> = [
+  { value: 'model', label: '模型' },
+  { value: 'permission', label: '权限' },
+  { value: 'info', label: '状态' },
+];
+
 const builtinCommands: Array<{ name: string; description: string }> = [
   { name: 'btw', description: '旁问：基于当前上下文提问，不打断主对话' },
   { name: 'clear', description: '清空当前上下文，开始新对话' },
   { name: 'compact', description: '压缩上下文，保留摘要' },
-  { name: 'context', description: '查看当前上下文用量' },
-  { name: 'usage', description: '查看会话用量与费用' },
-  { name: 'model', description: '切换模型' },
-  { name: 'help', description: '查看 Claude Code 帮助' },
+  { name: 'context', description: '查看上下文用量（Web 面板）' },
+  { name: 'usage', description: '查看会话用量与费用（Web 面板）' },
+  { name: 'model', description: '切换模型（Web 面板）' },
+  { name: 'permissions', description: '切换权限模式（Web 面板）' },
+  { name: 'status', description: '查看会话状态（Web 面板）' },
+  { name: 'config', description: '打开会话设置（Web 面板）' },
+  { name: 'help', description: '查看 Web 命令帮助' },
   { name: 'init', description: '为项目生成 CLAUDE.md' },
   { name: 'review', description: '审查当前改动' },
 ];
@@ -576,7 +619,8 @@ function applySideEffects(event: StoredEvent): void {
     return;
   }
   if (event.type === 'session.meta') {
-    current.model = event.model ?? current.model;
+    // `model: undefined` is meaningful: it restores the CLI default.
+    current.model = event.model;
     current.permissionMode = event.permissionMode ?? current.permissionMode;
     current.costUsd = event.costUsd ?? current.costUsd;
     return;
@@ -997,6 +1041,8 @@ async function send(): Promise<void> {
   const text = draft.value.trim();
   const attachmentIds = attachments.value.map((attachment) => attachment.id);
 
+  if (handleWebCommand(text)) return;
+
   // `/btw` is a Web-side side question, not a CLI command. Route it to the
   // panel instead of sending the literal text into the main conversation.
   if (/^\/btw(?:\s|$)/.test(text)) {
@@ -1188,17 +1234,125 @@ async function chooseMode(mode: PermissionMode): Promise<void> {
   }
 }
 
-async function saveModel(): Promise<void> {
+function openSessionPanel(tab: SettingsTab = settingsTab.value): void {
+  helpOpen.value = false;
+  settingsTab.value = tab;
+  if (!settingsOpen.value) settingsModel.value = state.value?.model ?? '';
+  settingsOpen.value = true;
+  if (tab === 'info') void refreshContextNow();
+}
+
+function toggleSessionSettings(): void {
+  if (settingsOpen.value) settingsOpen.value = false;
+  else openSessionPanel(settingsTab.value);
+}
+
+function selectSettingsTab(tab: SettingsTab): void {
+  settingsTab.value = tab;
+  if (tab === 'info') void refreshContextNow();
+}
+
+async function refreshContextNow(): Promise<void> {
+  if (contextRefreshing.value) return;
+  contextRefreshing.value = true;
+  try {
+    const result = await api.contextUsage(sessionId.value);
+    if (result.contextUsage && state.value) {
+      state.value.contextUsage = result.contextUsage;
+    }
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : '读取上下文用量失败', 'error');
+  } finally {
+    contextRefreshing.value = false;
+  }
+}
+
+async function applyModel(value: string): Promise<void> {
+  if (modelBusy.value) return;
+  const model = value === 'default' ? '' : value.trim();
+  modelBusy.value = true;
   try {
     if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'set.model', model: settingsModel.value.trim() }));
+      ws.send(JSON.stringify({ type: 'set.model', model }));
     } else {
-      await api.setModel(sessionId.value, settingsModel.value.trim());
+      await api.setModel(sessionId.value, model);
     }
-    toast('模型设置已应用');
+    settingsModel.value = model;
+    toast(model ? `模型切换请求已发送：${model}` : '已请求恢复默认模型', 'success');
+    settingsOpen.value = false;
   } catch (err) {
     toast(err instanceof ApiError ? err.message : '切换模型失败', 'error');
+  } finally {
+    modelBusy.value = false;
   }
+}
+
+async function saveModel(): Promise<void> {
+  await applyModel(settingsModel.value);
+}
+
+function categoryWidth(tokens: number | undefined): string {
+  // Categories include free space/autocompact buffer, so the bar is relative
+  // to the context window, not to currently-used tokens.
+  const max = state.value?.contextUsage?.maxTokens ?? 0;
+  if (!max || !tokens) return '0%';
+  return `${Math.max(1, Math.min(100, Math.round((tokens / max) * 100)))}%`;
+}
+
+/**
+ * Web-native system/config commands. Returning true means the text was
+ * handled locally and must not be sent to the CLI (which would otherwise
+ * render a `<synthetic>` assistant message).
+ */
+function handleWebCommand(text: string): boolean {
+  const match = text.match(/^\/([a-zA-Z0-9_-]+)(?:[ \t]+([^\n]*))?$/);
+  if (!match) return false;
+  const name = match[1].toLowerCase();
+  const arg = (match[2] ?? '').trim();
+  if (!webCommandNames.has(name)) return false;
+
+  if (attachments.value.length > 0) {
+    toast('该命令不支持附件，请先移除附件', 'error');
+    return true;
+  }
+
+  switch (name) {
+    case 'model':
+      if (!arg) {
+        openSessionPanel('model');
+      } else {
+        void applyModel(arg);
+      }
+      break;
+    case 'context':
+      openSessionPanel('info');
+      break;
+    case 'usage':
+    case 'status':
+      openSessionPanel('info');
+      break;
+    case 'permissions':
+      openSessionPanel('permission');
+      break;
+    case 'config':
+      openSessionPanel('model');
+      toast('Web 端可配置模型、权限与会话状态；其他 CLI 配置请使用设置页或终端', 'info', 3600);
+      break;
+    case 'help':
+      settingsOpen.value = false;
+      helpOpen.value = true;
+      break;
+    default:
+      return false;
+  }
+
+  draft.value = '';
+  closeMenu();
+  void nextTick(() => {
+    resizeComposer();
+    textareaRef.value?.focus();
+  });
+  return true;
 }
 
 async function stopRuntime(): Promise<void> {
@@ -1302,6 +1456,20 @@ function onKeydown(event: KeyboardEvent): void {
       return;
     }
     if (event.key === 'Enter' || event.key === 'Tab') {
+      // If the user already typed the full slash command name, Enter should
+      // execute it instead of only completing `/model ` with a trailing space.
+      if (event.key === 'Enter' && menuType.value === 'slash' && menuQuery.value) {
+        const exact = menuItems.value.find(
+          (item) =>
+            item.kind !== 'file' &&
+            item.label.toLowerCase() === `/${menuQuery.value.toLowerCase()}`,
+        );
+        if (exact) {
+          event.preventDefault();
+          void send();
+          return;
+        }
+      }
       event.preventDefault();
       insertMenu(menuIndex.value);
       return;
@@ -1539,7 +1707,7 @@ onUnmounted(() => {
             <Icon name="spark" :size="13" />
             <span>旁问</span>
           </button>
-          <button class="icon-btn" title="会话设置" @click="settingsOpen = !settingsOpen">
+          <button class="icon-btn" title="会话设置" @click="toggleSessionSettings">
             <Icon name="settings" :size="18" />
           </button>
         </div>
@@ -1883,7 +2051,7 @@ onUnmounted(() => {
       </aside>
 
       <div v-if="settingsOpen" class="popover-backdrop" @click="settingsOpen = false" />
-      <div v-if="settingsOpen" class="session-popover">
+      <div v-if="settingsOpen" class="session-popover settings-popover">
         <div class="popover-head">
           <span>会话设置</span>
           <button class="icon-btn tiny" @click="settingsOpen = false">
@@ -1891,43 +2059,168 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <span class="mini-label">权限模式</span>
-        <div class="mode-list">
+        <div class="popover-tabs">
           <button
-            v-for="mode in appConfig?.permissionModes ?? []"
-            :key="mode.value"
-            class="mode-option"
-            :class="{
-              active: state?.permissionMode === mode.value,
-              danger: mode.value === 'bypassPermissions',
-            }"
-            :disabled="modeBusy"
-            @click="chooseMode(mode.value)"
+            v-for="tab in settingsTabs"
+            :key="tab.value"
+            class="popover-tab"
+            :class="{ active: settingsTab === tab.value }"
+            @click="selectSettingsTab(tab.value)"
           >
-            <span>{{ mode.label }}</span>
-            <Icon v-if="state?.permissionMode === mode.value" name="check" :size="14" />
+            {{ tab.label }}
           </button>
         </div>
 
-        <label class="popover-field">
-          <span class="mini-label">模型</span>
-          <input v-model="settingsModel" class="text-input" placeholder="留空使用默认模型" />
-        </label>
-        <button class="btn secondary block" @click="saveModel">应用模型</button>
+        <template v-if="settingsTab === 'model'">
+          <div class="popover-current">
+            <span class="mini-label">当前模型</span>
+            <code>{{ state?.model || '默认模型' }}</code>
+          </div>
+          <div class="model-grid">
+            <button
+              v-for="preset in modelPresets"
+              :key="preset.value"
+              class="model-option"
+              :class="{
+                active:
+                  preset.value === 'default'
+                    ? !state?.model
+                    : state?.model === preset.value,
+              }"
+              :disabled="modelBusy"
+              @click="applyModel(preset.value)"
+            >
+              <span>{{ preset.label }}</span>
+              <small>{{ preset.hint }}</small>
+            </button>
+          </div>
+          <label class="popover-field">
+            <span class="mini-label">自定义模型 ID</span>
+            <input
+              v-model="settingsModel"
+              class="text-input"
+              placeholder="留空使用默认模型"
+              spellcheck="false"
+              @keydown.enter.prevent="saveModel"
+            />
+          </label>
+          <button class="btn secondary block" :disabled="modelBusy" @click="saveModel">
+            <span v-if="modelBusy" class="spinner tiny" />
+            应用模型
+          </button>
+          <p class="popover-note">
+            模型别名由 Claude Code CLI 解释；可用 sonnet / opus / haiku / fable / best /
+            1M 变体 / opusplan，或填写完整模型 ID。
+          </p>
+        </template>
 
-        <div class="popover-sep" />
-        <div class="popover-meta">
-          <span v-if="state?.claudeSessionId">会话 ID</span>
-          <code v-if="state?.claudeSessionId">{{ state.claudeSessionId.slice(0, 8) }}…</code>
+        <template v-else-if="settingsTab === 'permission'">
+          <span class="mini-label">权限模式</span>
+          <div class="mode-list">
+            <button
+              v-for="mode in appConfig?.permissionModes ?? []"
+              :key="mode.value"
+              class="mode-option"
+              :class="{
+                active: state?.permissionMode === mode.value,
+                danger: mode.value === 'bypassPermissions',
+              }"
+              :disabled="modeBusy"
+              @click="chooseMode(mode.value)"
+            >
+              <span>{{ mode.label }}</span>
+              <Icon v-if="state?.permissionMode === mode.value" name="check" :size="14" />
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="popover-info-list">
+            <div class="popover-meta">
+              <span>状态</span>
+              <code>{{ statusLabel(state?.status) }}</code>
+            </div>
+            <div class="popover-meta">
+              <span>模型</span>
+              <code>{{ state?.model || '默认模型' }}</code>
+            </div>
+            <div class="popover-meta">
+              <span>权限</span>
+              <code>{{ modeLabel || '—' }}</code>
+            </div>
+            <div class="popover-meta">
+              <span>工作目录</span>
+              <code :title="state?.cwd ?? ''">{{ prettyPath(state?.cwd ?? '') }}</code>
+            </div>
+            <div v-if="state?.claudeSessionId" class="popover-meta">
+              <span>会话 ID</span>
+              <code>{{ state.claudeSessionId.slice(0, 8) }}…</code>
+            </div>
+            <div class="popover-meta">
+              <span>CLI</span>
+              <code>{{ state?.claudeVersion ?? appConfig?.versions.cli ?? '—' }}</code>
+            </div>
+            <div v-if="state?.costUsd" class="popover-meta">
+              <span>费用</span>
+              <code>{{ formatCost(state.costUsd) }}</code>
+            </div>
+            <div v-if="state?.activeTools?.length" class="popover-meta">
+              <span>活动工具</span>
+              <code>{{ state.activeTools.map((tool) => tool.name).join('、') }}</code>
+            </div>
+          </div>
+
+          <div class="popover-sep" />
+          <div class="context-title">
+            <span class="mini-label">上下文用量</span>
+            <button class="mini-link" :disabled="contextRefreshing" @click="refreshContextNow">
+              <span v-if="contextRefreshing" class="spinner tiny" />
+              {{ contextRefreshing ? '读取中…' : '刷新' }}
+            </button>
+          </div>
+          <template v-if="state?.contextUsage">
+            <div class="context-summary">
+              {{ formatTokens(state.contextUsage.totalTokens) || '—' }} /
+              {{ formatTokens(state.contextUsage.maxTokens) || '—' }}
+              <span>· {{ Math.round(state.contextUsage.percentage ?? 0) }}%</span>
+            </div>
+            <div v-if="state.contextUsage.categories?.length" class="context-cats">
+              <div v-for="category in state.contextUsage.categories" :key="category.name" class="context-cat">
+                <span class="context-cat-name">{{ category.name }}</span>
+                <span class="context-cat-bar"><span :style="{ width: categoryWidth(category.tokens) }" /></span>
+                <span class="context-cat-value">{{ formatTokens(category.tokens) }}</span>
+              </div>
+            </div>
+          </template>
+          <p v-else class="popover-note">暂无上下文数据；发送一条消息后再查看。</p>
+
+          <div class="popover-sep" />
+          <button class="btn ghost danger-text block" @click="stopRuntime">结束后台进程</button>
+          <p class="popover-note">
+            关闭浏览器页面不会停止后台任务；再次打开会自动附着并回放。结束后台进程只停止进程，聊天记录保留。
+          </p>
+        </template>
+      </div>
+
+      <div v-if="helpOpen" class="popover-backdrop" @click="helpOpen = false" />
+      <div v-if="helpOpen" class="session-popover help-popover">
+        <div class="popover-head">
+          <span>Web 命令</span>
+          <button class="icon-btn tiny" @click="helpOpen = false">
+            <Icon name="x" :size="15" />
+          </button>
         </div>
-        <div class="popover-meta">
-          <span>CLI</span>
-          <code>{{ state?.claudeVersion ?? appConfig?.versions.cli ?? '—' }}</code>
-        </div>
-        <button class="btn ghost danger-text block" @click="stopRuntime">结束后台进程</button>
         <p class="popover-note">
-          关闭浏览器页面不会停止后台任务；再次打开会自动附着并回放。结束后台进程只停止进程，聊天记录保留。
+          这些命令由 Web 原生处理，不会发送给 CLI，也不会产生 <code>&lt;synthetic&gt;</code> 对话。
+          其他 <code>/命令</code> 和 Skill 仍交给 Claude Code 执行。
         </p>
+        <div class="help-list">
+          <div v-for="command in webCommands" :key="command.name" class="help-item">
+            <code>{{ command.usage }}</code>
+            <span>{{ command.description }}</span>
+          </div>
+        </div>
+        <p class="popover-note">输入 <code>/</code> 浏览全部命令，输入 <code>@</code> 引用文件。</p>
       </div>
     </div>
   </AppShell>

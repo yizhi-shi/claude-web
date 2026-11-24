@@ -1242,7 +1242,7 @@ export class ClaudeRuntime {
       this.emit({ type: 'session.status', status: 'idle' });
       this.options2.onMeta({ status: 'idle', costUsd: this.costUsd });
       this.notifyState(true);
-      this.refreshContextUsage();
+      void this.refreshContextUsage();
       this.scheduleIdleTimer();
       return;
     }
@@ -1437,31 +1437,34 @@ export class ClaudeRuntime {
     }
   }
 
-  private refreshContextUsage(): void {
+  /**
+   * Refresh context usage from the SDK. Public so the Web UI can implement a
+   * native `/context` command without sending a synthetic CLI message.
+   */
+  async refreshContextUsage(): Promise<ContextUsage | undefined> {
     const q = this.q;
-    if (!q || this.stopped) return;
-    void q
-      .getContextUsage({ detail: 'summary' })
-      .then((usage) => {
-        if (!usage) return;
-        const raw = usage as unknown as Record<string, unknown>;
-        this.contextUsage = {
-          totalTokens: typeof raw.totalTokens === 'number' ? raw.totalTokens : undefined,
-          maxTokens: typeof raw.maxTokens === 'number' ? raw.maxTokens : undefined,
-          percentage: typeof raw.percentage === 'number' ? raw.percentage : undefined,
-          categories: Array.isArray(raw.categories)
-            ? (raw.categories as Record<string, unknown>[]).map((row) => ({
-                id: typeof row.id === 'string' ? row.id : undefined,
-                name: String(row.name ?? ''),
-                tokens: typeof row.tokens === 'number' ? row.tokens : 0,
-              }))
-            : undefined,
-        };
-        this.notifyState(true);
-      })
-      .catch(() => {
-        // context usage is best-effort
-      });
+    if (!q || this.stopped) return this.contextUsage;
+    try {
+      const usage = await q.getContextUsage({ detail: 'summary' });
+      if (!usage) return this.contextUsage;
+      const raw = usage as unknown as Record<string, unknown>;
+      this.contextUsage = {
+        totalTokens: typeof raw.totalTokens === 'number' ? raw.totalTokens : undefined,
+        maxTokens: typeof raw.maxTokens === 'number' ? raw.maxTokens : undefined,
+        percentage: typeof raw.percentage === 'number' ? raw.percentage : undefined,
+        categories: Array.isArray(raw.categories)
+          ? (raw.categories as Record<string, unknown>[]).map((row) => ({
+              id: typeof row.id === 'string' ? row.id : undefined,
+              name: String(row.name ?? ''),
+              tokens: typeof row.tokens === 'number' ? row.tokens : 0,
+            }))
+          : undefined,
+      };
+      this.notifyState(true);
+    } catch {
+      // context usage is best-effort
+    }
+    return this.contextUsage;
   }
 
   async stop(detail = '已停止'): Promise<void> {

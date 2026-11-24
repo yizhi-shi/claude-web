@@ -88,9 +88,9 @@ CLI 发：
 - `Chat.vue` 的 `slashCommands` computed 优先级：
   1. `commandDetails`（带描述，来自 `initializationResult`）；
   2. `slashCommands` / `skills`（来自 `system/init`）；
-  3. 内置兜底（`/clear` `/compact` `/context` `/usage` `/model` `/help` `/init` `/review`）。
+  3. 内置兜底（`/clear` `/compact` `/context` `/usage` `/model` `/permissions` `/status` `/config` `/help` `/init` `/review`）。
 - 去重、按输入过滤、最多 14 条。
-- **菜单只插入文本**，真正执行仍是把 `/xxx` 当用户消息发给 CLI，由 CLI 解析。
+- **菜单负责补全；完整命令名 + Enter 直接执行**。Web 原生命令由 `handleWebCommand()` 拦截，其余 `/xxx` 作为用户消息发给 CLI。
 
 ## 2. 输入框怎么 hook
 
@@ -122,7 +122,25 @@ GET /api/fs/search?cwd=<cwd>&q=<query>
 
 没有 `rg` 时退化为受限深度的目录遍历。前端插入 `@package.json`，CLI 在 cwd 下解析。
 
-键盘：菜单打开时优先消费 `ArrowUp/ArrowDown/Enter/Tab/Escape`；菜单关闭时 `Enter` 才发送，`Shift+Enter` 换行。工具栏的「命令」「文件」按钮只是先插入 `/` 或 `@` 再触发同一个菜单。
+键盘：菜单打开时优先消费 `ArrowUp/ArrowDown/Enter/Tab/Escape`；若输入的 `/名字` 与某个命令完全匹配，Enter 直接执行该命令，否则 Enter 只补全当前选中项；菜单关闭时 `Enter` 才发送，`Shift+Enter` 换行。工具栏的「命令」「文件」按钮只是先插入 `/` 或 `@` 再触发同一个菜单。
+
+### Web 原生命令与 synthetic 消息
+
+`Chat.vue` 的 `handleWebCommand()` 在发送前拦截以下命令，不把文本交给 CLI：
+
+| 命令 | 行为 |
+|---|---|
+| `/model` | 打开会话设置的模型 tab |
+| `/model <name>` / `/model default` | 通过 `set.model` 切换 / 清除模型覆盖 |
+| `/context` | 打开状态 tab，并请求 `GET /api/sessions/:id/context` 刷新上下文用量 |
+| `/usage` / `/status` | 打开状态 tab（模型、权限、目录、费用、上下文、活动工具） |
+| `/permissions` | 打开权限 tab |
+| `/config` | 打开会话设置；其他 CLI 配置提示使用设置页/终端 |
+| `/help` | 打开 Web 命令帮助 |
+
+`runtime.refreshContextUsage()` 现在返回 `ContextUsage | undefined`，HTTP 路由把它暴露给前端；它仍然在每次 `turn.result` 后自动刷新。
+
+CLI 对未拦截命令返回的 assistant 消息可能带 `model: "<synthetic>"`（例如 `/context` 的旧输出或 `No response requested.`）。`MessageItem.vue` 把这类消息渲染为「系统」通知，隐藏 `<synthetic>` 模型 chip，并隐藏空文本/`No response requested.`，避免系统输出伪装成 Claude 回复。
 
 ### 附件与图片
 

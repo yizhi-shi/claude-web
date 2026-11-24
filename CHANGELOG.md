@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 — 2026-11-24
+
+- Web-native system/config slash commands: `/model` opens a model panel (current model, sonnet/opus/haiku/fable/best/1M/opusplan presets, custom ID), `/model <name>` switches directly, `/model default` clears the override; `/context`, `/usage`, `/status`, `/permissions`, `/config` and `/help` open native panels instead of sending synthetic CLI text into the conversation.
+- Typing a complete slash command name and pressing Enter now executes it; partial input still completes the selected menu item.
+- Added `GET /api/sessions/:id/context` backed by `ClaudeRuntime.refreshContextUsage()` so the status panel can refresh context usage on demand.
+- `<synthetic>` assistant messages now render as a neutral “系统” notice without a `<synthetic>` model chip; empty / `No response requested.` system messages are hidden.
+- Browser smoke test covers `/model`, model preset/default switching, `/help`, `/context`, `/permissions` and synthetic rendering.
+
 ## 0.8.0 — 2026-11-24
 
 - Side questions no longer resume or fork the main Claude session. `manager.sideQuestion()` builds a compact context from the latest ~160 renderable events (24k char cap, tool inputs/results truncated, current active tools) and `sideQuestion.ts` runs a fresh, non-persisted, tool-less query with `strictMcpConfig: true` and a read-only system prompt.

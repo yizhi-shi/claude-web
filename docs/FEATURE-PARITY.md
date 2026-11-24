@@ -22,7 +22,8 @@
 | 后台任务/子代理状态 | ✅ | ✅ | task_started/progress/updated/notification |
 | 上下文用量 / 费用 | ✅ | ✅ | `getContextUsage` + `total_cost_usd` |
 | 上下文压缩提示 | ✅ | ✅ | status / compact_boundary 事件 |
-| 斜杠命令 | ✅ | ✅ | init 的 `slash_commands` + 内置菜单 |
+| 斜杠命令 | ✅ | ✅ | init 的 `slash_commands` + 内置菜单；`/model`、`/context`、`/usage`、`/status`、`/permissions`、`/config`、`/help` 由 Web 原生面板处理，其余交给 CLI |
+| 系统配置输出 | ✅ | ✅ | `<synthetic>` 消息渲染为「系统」通知，不显示 `<synthetic>` 模型 chip；空的 `No response requested.` 不占对话 |
 | Skills | ✅ | ✅ | init 的 `skills`，按 `/名字` 插入 |
 | `@` 文件引用 | ✅ | ✅ | `rg --files` 搜索，插入相对路径 |
 | Plan mode | ✅ | ✅ | 可选择 plan 模式；`ExitPlanMode` 展示计划，支持批准 / 退回完善 / 修改意见 |
@@ -34,7 +35,7 @@
 | 文件树/编辑器 | ✅（部分版本） | ⏳ | 刻意后置；保持核心精简 |
 | Git 面板 | 第三方/插件 | ⏳ | 后置 |
 | MCP / 插件管理 | ✅ | ⏳ | 后置；对话已能使用已配置的 MCP |
-| 多模型供应商 | 取决于 CLI | ✅ | 沿用本机 `~/.claude/settings.json`/环境变量 |
+| 多模型供应商 | 取决于 CLI | ✅ | 沿用本机 `~/.claude/settings.json`/环境变量；聊天页模型面板支持别名/自定义 ID |
 | 手机/平板 | ❌ | ✅ | 响应式 + 抽屉侧栏 + 底部输入区 |
 | 亮/暗主题 | ✅ | ✅ | CSS token 切换，本地记忆 |
 | 页面刷新不中断 | ❌（IDE 重载会断） | ✅ | 服务端常驻 + 事件回放 |

@@ -93,6 +93,14 @@
 - `Esc` 在没有候选菜单时停止当前回合；候选菜单打开时 `Esc` 仍只关闭菜单，避免误停。
 - 服务端 interrupt 先拒绝挂起的权限请求再调用 SDK，避免“等待批准时点停止没反应”。实测活动 Bash 工具中断约 51ms 返回 idle。
 
+## Web 原生命令与会话设置（2026-11-24 优化）
+
+- 会话设置 popover 改为三个 tab：**模型 / 权限 / 状态**。模型 tab 提供当前模型、常用别名（sonnet/opus/haiku/fable/best/1M 变体/opusplan）和自定义模型 ID；权限 tab 是原来的权限模式列表；状态 tab 展示模型、权限、目录、会话 ID、CLI、费用、活动工具和上下文分类用量。
+- `/model` 直接打开模型 tab，`/model <name>` 直接切换，`/model default` 恢复默认；`/context`、`/usage`、`/status` 打开状态 tab，`/permissions` 打开权限 tab，`/config` 打开设置，`/help` 打开 Web 命令帮助。
+- 输入完整斜杠命令名后按 Enter 直接执行；只输入前缀时 Enter 仍只补全选中项，避免误发。
+- CLI 的 `<synthetic>` assistant 消息显示为「系统」通知（灰色系统头像、无 `<synthetic>` 模型 chip）；`No response requested.` 等空系统消息不渲染。
+- 这些交互不把 CLI 的配置文本刷进对话，减少“终端输出掉进聊天记录”的噪声，也让模型/权限/上下文的配置入口保持一致。
+
 ## Diff 与代码块可读性（2026-11-23 优化）
 
 - 亮色模式下，diff 的新增/删除行使用专门的 token，而不是 10% 透明度的 accent：
