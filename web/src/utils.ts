@@ -2,6 +2,7 @@ import AnsiToHtml from 'ansi-to-html';
 import { diffLines } from 'diff';
 import hljs from 'highlight.js/lib/common';
 import MarkdownIt from 'markdown-it';
+import { t } from './i18n';
 import type { ContentBlock } from './types';
 
 function escapeHtml(value: string): string {
@@ -63,12 +64,12 @@ export function formatRelative(value: string | number | undefined): string {
   if (!Number.isFinite(time)) return '';
   const delta = Date.now() - time;
   const abs = Math.abs(delta);
-  if (abs < 60_000) return '刚刚';
-  if (abs < 3_600_000) return `${Math.floor(abs / 60_000)} 分钟前`;
-  if (abs < 86_400_000) return `${Math.floor(abs / 3_600_000)} 小时前`;
-  if (abs < 7 * 86_400_000) return `${Math.floor(abs / 86_400_000)} 天前`;
+  if (abs < 60_000) return t('刚刚');
+  if (abs < 3_600_000) return t('{n} 分钟前', { n: Math.floor(abs / 60_000) });
+  if (abs < 86_400_000) return t('{n} 小时前', { n: Math.floor(abs / 3_600_000) });
+  if (abs < 7 * 86_400_000) return t('{n} 天前', { n: Math.floor(abs / 86_400_000) });
   const date = new Date(time);
-  return `${date.getMonth() + 1} 月 ${date.getDate()} 日`;
+  return t('{month} 月 {day} 日', { month: date.getMonth() + 1, day: date.getDate() });
 }
 
 export function formatClock(value: string | number | undefined): string {
@@ -82,11 +83,11 @@ export function formatClock(value: string | number | undefined): string {
 
 export function formatDuration(ms: number | undefined): string {
   if (!ms || ms < 0) return '';
-  if (ms < 1000) return `${Math.round(ms)} 毫秒`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} 秒`;
+  if (ms < 1000) return t('{n} 毫秒', { n: Math.round(ms) });
+  if (ms < 60_000) return t('{n} 秒', { n: (ms / 1000).toFixed(ms < 10_000 ? 1 : 0) });
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.round((ms % 60_000) / 1000);
-  return `${minutes} 分 ${seconds} 秒`;
+  return t('{m} 分 {s} 秒', { m: minutes, s: seconds });
 }
 
 export function formatCost(usd: number | undefined): string {
@@ -138,19 +139,19 @@ export function presentTool(name: string, input: Record<string, unknown>): ToolP
   if (lower === 'bash' || lower === 'shell' || lower === 'exec') {
     const command = textOf(input.command) || textOf(input.cmd);
     return {
-      label: '终端',
-      summary: command.split('\n')[0]?.slice(0, 120) || '执行命令',
+      label: t('终端'),
+      summary: command.split('\n')[0]?.slice(0, 120) || t('执行命令'),
       command,
     };
   }
   if (lower === 'read') {
     const file = textOf(input.file_path) || textOf(input.path);
-    return { label: '读取', summary: prettyPath(file), filePath: file };
+    return { label: t('读取'), summary: prettyPath(file), filePath: file };
   }
   if (lower === 'edit') {
     const file = textOf(input.file_path) || textOf(input.path);
     return {
-      label: '编辑',
+      label: t('编辑'),
       summary: prettyPath(file),
       filePath: file,
       diff: buildDiff(textOf(input.old_string), textOf(input.new_string)),
@@ -165,37 +166,37 @@ export function presentTool(name: string, input: Record<string, unknown>): ToolP
       const row = edit as Record<string, unknown>;
       lines.push(...buildDiff(textOf(row.old_string), textOf(row.new_string)));
     }
-    return { label: '批量编辑', summary: prettyPath(file), filePath: file, diff: lines };
+    return { label: t('批量编辑'), summary: prettyPath(file), filePath: file, diff: lines };
   }
   if (lower === 'write' || lower === 'create') {
     const file = textOf(input.file_path) || textOf(input.path);
     return {
-      label: '写入',
+      label: t('写入'),
       summary: prettyPath(file),
       filePath: file,
       diff: buildDiff('', textOf(input.content)),
     };
   }
   if (lower === 'glob') {
-    return { label: '查找文件', summary: textOf(input.pattern), json: JSON.stringify(input, null, 2) };
+    return { label: t('查找文件'), summary: textOf(input.pattern), json: JSON.stringify(input, null, 2) };
   }
   if (lower === 'grep') {
     return {
-      label: '搜索内容',
-      summary: textOf(input.pattern) || '搜索',
+      label: t('搜索内容'),
+      summary: textOf(input.pattern) || t('搜索'),
       json: JSON.stringify(input, null, 2),
     };
   }
   if (lower === 'webfetch' || lower === 'web_fetch') {
-    return { label: '抓取网页', summary: textOf(input.url), json: JSON.stringify(input, null, 2) };
+    return { label: t('抓取网页'), summary: textOf(input.url), json: JSON.stringify(input, null, 2) };
   }
   if (lower === 'websearch' || lower === 'web_search') {
-    return { label: '联网搜索', summary: textOf(input.query), json: JSON.stringify(input, null, 2) };
+    return { label: t('联网搜索'), summary: textOf(input.query), json: JSON.stringify(input, null, 2) };
   }
   if (lower === 'task' || lower === 'agent') {
     return {
-      label: '子代理',
-      summary: textOf(input.description) || textOf(input.subagent_type) || '委派任务',
+      label: t('子代理'),
+      summary: textOf(input.description) || textOf(input.subagent_type) || t('委派任务'),
       json: JSON.stringify(input, null, 2),
     };
   }
@@ -209,8 +210,8 @@ export function presentTool(name: string, input: Record<string, unknown>): ToolP
           }))
       : [];
     return {
-      label: '任务清单',
-      summary: todos.length ? `${todos.length} 项` : '更新任务清单',
+      label: t('任务清单'),
+      summary: todos.length ? t('{n} 项', { n: todos.length }) : t('更新任务清单'),
       todos,
     };
   }
@@ -231,17 +232,17 @@ export function presentTool(name: string, input: Record<string, unknown>): ToolP
           }))
       : [];
     return {
-      label: '向你提问',
-      summary: questions[0]?.question?.slice(0, 80) || '等待回答',
+      label: t('向你提问'),
+      summary: questions[0]?.question?.slice(0, 80) || t('等待回答'),
       questions,
     };
   }
   if (lower === 'exitplanmode') {
-    return { label: '计划确认', summary: '等待确认执行计划', json: JSON.stringify(input, null, 2) };
+    return { label: t('计划确认'), summary: t('等待确认执行计划'), json: JSON.stringify(input, null, 2) };
   }
   return {
     label: name.replace(/^mcp__/, 'MCP · ').replace(/__/g, ' / '),
-    summary: Object.keys(input).slice(0, 3).join(', ') || '工具调用',
+    summary: Object.keys(input).slice(0, 3).join(', ') || t('工具调用'),
     json: JSON.stringify(input, null, 2),
   };
 }
@@ -260,19 +261,19 @@ export function isEditTool(name: string): boolean {
 export function statusLabel(status: string | undefined): string {
   switch (status) {
     case 'running':
-      return '运行中';
+      return t('运行中');
     case 'waiting_permission':
-      return '等待批准';
+      return t('等待批准');
     case 'idle':
-      return '空闲';
+      return t('空闲');
     case 'stopped':
-      return '已停止';
+      return t('已停止');
     case 'error':
-      return '异常';
+      return t('异常');
     case 'new':
-      return '新会话';
+      return t('新会话');
     default:
-      return '历史';
+      return t('历史');
   }
 }
 

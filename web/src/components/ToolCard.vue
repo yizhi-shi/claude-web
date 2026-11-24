@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { t } from '../i18n';
 import { ansiToHtml, isEditTool, presentTool } from '../utils';
 import Icon from './Icon.vue';
 
@@ -22,7 +23,9 @@ const diffTruncated = computed(() => (presentation.value.diff?.length ?? 0) > 40
 const resultContent = computed(() => props.result?.content ?? '');
 const resultTruncated = computed(() => resultContent.value.length > 30_000);
 const displayResult = computed(() =>
-  resultTruncated.value ? `${resultContent.value.slice(0, 30_000)}\n\n… 其余内容已省略，可复制完整输出` : resultContent.value,
+  resultTruncated.value
+    ? `${resultContent.value.slice(0, 30_000)}\n\n${t('… 其余内容已省略，可复制完整输出')}`
+    : resultContent.value,
 );
 const resultHtml = computed(() => (isBash.value ? ansiToHtml(displayResult.value) : ''));
 
@@ -67,7 +70,7 @@ async function copy(value: string): Promise<void> {
       <div v-if="presentation.command" class="tool-command">
         <span class="command-prompt">$</span>
         <pre>{{ presentation.command }}</pre>
-        <button class="icon-btn tiny" title="复制命令" @click="copy(presentation.command)">
+        <button class="icon-btn tiny" :title="t('复制命令')" @click="copy(presentation.command)">
           <Icon :name="copied ? 'check' : 'copy'" :size="14" />
         </button>
       </div>
@@ -82,8 +85,8 @@ async function copy(value: string): Promise<void> {
           <span class="diff-sign">{{ line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ' }}</span>
           <span class="diff-text">{{ line.text }}</span>
         </div>
-        <div v-if="diffLines.length === 0" class="diff-empty">没有内容变化</div>
-        <div v-if="diffTruncated" class="diff-more">仅显示前 400 行</div>
+        <div v-if="diffLines.length === 0" class="diff-empty">{{ t('没有内容变化') }}</div>
+        <div v-if="diffTruncated" class="diff-more">{{ t('仅显示前 400 行') }}</div>
       </div>
 
       <div v-else-if="presentation.todos" class="todo-list">
@@ -107,17 +110,17 @@ async function copy(value: string): Promise<void> {
 
       <div v-else-if="presentation.json && !resultContent" class="tool-json">
         <button class="raw-toggle" @click="showRaw = !showRaw">
-          {{ showRaw ? '收起参数' : '查看参数' }}
+          {{ showRaw ? t('收起参数') : t('查看参数') }}
         </button>
         <pre v-if="showRaw">{{ presentation.json }}</pre>
       </div>
 
       <div v-if="resultContent" class="tool-result">
         <div class="result-head">
-          <span>输出</span>
+          <span>{{ t('输出') }}</span>
           <button class="raw-toggle" @click="copy(resultContent)">
             <Icon :name="copied ? 'check' : 'copy'" :size="13" />
-            {{ copied ? '已复制' : '复制' }}
+            {{ copied ? t('已复制') : t('复制') }}
           </button>
         </div>
         <pre v-if="isBash" class="tool-output ansi" v-html="resultHtml" />
@@ -125,7 +128,7 @@ async function copy(value: string): Promise<void> {
       </div>
 
       <div v-if="!resultContent && presentation.command && !presentation.diff" class="tool-pending">
-        等待执行结果…
+        {{ t('等待执行结果…') }}
       </div>
     </div>
   </div>

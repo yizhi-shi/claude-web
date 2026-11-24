@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { ApiError, api } from '../api';
+import { t, translateServerMessage } from '../i18n';
 import { toast } from '../store';
 import type { VoiceConfigView, VoiceProviderId } from '../types';
 import Icon from './Icon.vue';
@@ -85,15 +86,15 @@ function voiceWsUrl(): string {
 
 function micBlockedReason(): string | null {
   if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(location.hostname)) {
-    return '浏览器麦克风只在 HTTPS 或 localhost 下可用';
+    return t('浏览器麦克风只在 HTTPS 或 localhost 下可用');
   }
-  if (!navigator.mediaDevices?.getUserMedia) return '当前浏览器不支持录音';
+  if (!navigator.mediaDevices?.getUserMedia) return t('当前浏览器不支持录音');
   return null;
 }
 
 async function transcribeBlob(blob: Blob): Promise<void> {
   if (blob.size < 800) {
-    toast('录音太短，请多说一会儿', 'info');
+    toast(t('录音太短，请多说一会儿'), 'info');
     return;
   }
   busy.value = true;
@@ -109,9 +110,9 @@ async function transcribeBlob(blob: Blob): Promise<void> {
       language: active.value?.language,
     });
     if (result.text.trim()) emit('text', result.text.trim());
-    else toast('没有识别到语音内容', 'info');
+    else toast(t('没有识别到语音内容'), 'info');
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '语音识别失败', 'error', 4200);
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('语音识别失败'), 'error', 4200);
   } finally {
     busy.value = false;
   }
@@ -131,7 +132,7 @@ async function startSegment(): Promise<void> {
         name: 'microphone' as PermissionName,
       });
       if (status?.state === 'denied') {
-        toast('麦克风权限被拒绝，请在浏览器设置中允许后重试', 'error', 4200);
+        toast(t('麦克风权限被拒绝，请在浏览器设置中允许后重试'), 'error', 4200);
         return;
       }
     } catch {
@@ -171,8 +172,8 @@ async function startSegment(): Promise<void> {
     recording.value = false;
     toast(
       err instanceof Error && err.name === 'NotAllowedError'
-        ? '麦克风权限被拒绝，请在浏览器设置中允许'
-        : '无法打开麦克风',
+        ? t('麦克风权限被拒绝，请在浏览器设置中允许')
+        : t('无法打开麦克风'),
       'error',
       4200,
     );
@@ -392,20 +393,20 @@ async function startLive(): Promise<void> {
       return;
     }
     if (type === 'error') {
-      const text = typeof message.message === 'string' ? message.message : '实时语音识别失败';
+      const text = typeof message.message === 'string' ? message.message : t('实时语音识别失败');
       if (liveStarted && !liveStopRequested) toast(text, 'error', 4200);
       rejectOnce(text);
       finishLive();
     }
   };
   socket.onerror = () => {
-    const message = '实时语音连接失败';
+    const message = t('实时语音连接失败');
     if (liveStarted && !liveStopRequested) toast(message, 'error', 4200);
     rejectOnce(message);
     finishLive();
   };
   socket.onclose = () => {
-    if (liveReadyReject) rejectOnce('实时语音连接已关闭');
+    if (liveReadyReject) rejectOnce(t('实时语音连接已关闭'));
     finishLive();
   };
 
@@ -421,7 +422,7 @@ async function startLive(): Promise<void> {
       Promise.race([
         liveReady,
         new Promise<void>((_, reject) =>
-          window.setTimeout(() => reject(new Error('实时语音连接超时')), 20_000),
+          window.setTimeout(() => reject(new Error(t('实时语音连接超时'))), 20_000),
         ),
       ]),
       audioPromise,
@@ -431,7 +432,7 @@ async function startLive(): Promise<void> {
     // The user may have cancelled while the provider was still handshaking.
     if (!disposed && liveSocket === socket) {
       toast(
-        error instanceof Error ? error.message : '无法启动实时语音识别',
+        error instanceof Error ? error.message : t('无法启动实时语音识别'),
         'error',
         4200,
       );
@@ -472,11 +473,11 @@ function startBrowserRecognition(): void {
     (window as unknown as { SpeechRecognition?: new () => never }).SpeechRecognition ??
     (window as unknown as { webkitSpeechRecognition?: new () => never }).webkitSpeechRecognition;
   if (!RecognitionCtor) {
-    toast('当前浏览器不支持内置语音识别，请在设置中启用 Gemini 或 OpenAI 兼容渠道', 'error', 4200);
+    toast(t('当前浏览器不支持内置语音识别，请在设置中启用 Gemini 或 OpenAI 兼容渠道'), 'error', 4200);
     return;
   }
   if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(location.hostname)) {
-    toast('浏览器内置识别只在 HTTPS 或 localhost 下可用', 'error', 4200);
+    toast(t('浏览器内置识别只在 HTTPS 或 localhost 下可用'), 'error', 4200);
     return;
   }
   const recognition = new (RecognitionCtor as unknown as {
@@ -511,7 +512,7 @@ function startBrowserRecognition(): void {
     if (combined) emit('partial', combined);
   };
   recognition.onerror = () => {
-    toast('浏览器语音识别失败，请检查麦克风权限', 'error', 4200);
+    toast(t('浏览器语音识别失败，请检查麦克风权限'), 'error', 4200);
     if (browserFinalText.trim()) emit('text', browserFinalText.trim());
     recording.value = false;
     browserRecognition = null;
@@ -538,7 +539,7 @@ function startBrowserRecognition(): void {
     recording.value = false;
     browserRecognition = null;
     liveStarted = false;
-    toast('无法启动浏览器语音识别', 'error', 4200);
+    toast(t('无法启动浏览器语音识别'), 'error', 4200);
     emit('end');
   }
 }
@@ -570,7 +571,7 @@ async function toggleDictation(): Promise<void> {
       cancelLive();
       return;
     }
-    toast('正在识别上一段录音…', 'info');
+    toast(t('正在识别上一段录音…'), 'info');
     return;
   }
   if (recording.value) {
@@ -581,11 +582,11 @@ async function toggleDictation(): Promise<void> {
   }
   if (!config.value) await loadConfig();
   if (!config.value) {
-    toast('无法读取语音配置，请稍后重试', 'error', 4200);
+    toast(t('无法读取语音配置，请稍后重试'), 'error', 4200);
     return;
   }
   if (!configured.value) {
-    toast('语音识别尚未配置：请到 设置 → 语音识别 启用一个渠道', 'info', 4800);
+    toast(t('语音识别尚未配置：请到 设置 → 语音识别 启用一个渠道'), 'info', 4800);
     return;
   }
   if (liveEnabled.value) {
@@ -594,7 +595,7 @@ async function toggleDictation(): Promise<void> {
   }
   if (active.value?.liveEnabled && !active.value.liveAvailable) {
     toast(
-      `实时识别不可用：${active.value.liveDetail || '配置不完整'}，已回退到整段转写`,
+      t('实时识别不可用：{detail}，已回退到整段转写', { detail: active.value.liveDetail || t('配置不完整') }),
       'info',
       4200,
     );
@@ -648,12 +649,12 @@ onUnmounted(() => {
       class="tool-btn voice-btn"
       :class="{ recording, busy }"
       :disabled="starting"
-      :title="busy ? '正在收尾，点击可立即取消' : recording ? '结束语音输入' : '语音输入（边说边写）'"
-      :aria-label="busy ? '取消语音收尾' : recording ? '结束语音输入' : '语音输入'"
+      :title="busy ? t('正在收尾，点击可立即取消') : recording ? t('结束语音输入') : t('语音输入（边说边写）')"
+      :aria-label="busy ? t('取消语音收尾') : recording ? t('结束语音输入') : t('语音输入')"
       @click="toggleDictation"
     >
       <Icon name="mic" :size="16" />
-      <span>{{ busy ? '处理中' : recording ? '结束' : '语音' }}</span>
+      <span>{{ busy ? t('处理中') : recording ? t('结束') : t('语音') }}</span>
       <span v-if="recording" class="voice-pulse" />
     </button>
   </div>

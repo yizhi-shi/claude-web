@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import { locale, t, toggleLocale } from '../i18n';
 import {
   appConfig,
   authState,
@@ -24,7 +25,7 @@ let pollTimer: number | undefined;
 
 const activeId = computed(() => (route.params.id as string | undefined) ?? '');
 const visibleSessions = computed(() => sessions.value.slice(0, 60));
-const version = computed(() => appConfig.value?.versions.claudeWeb ?? '0.9.0');
+const version = computed(() => appConfig.value?.versions.claudeWeb ?? '0.10.0');
 
 function isActive(id: string): boolean {
   return activeId.value === id;
@@ -82,20 +83,20 @@ onUnmounted(() => {
       <div class="brand">
         <span class="brand-mark"><Icon name="brand" :size="30" /></span>
         <span class="brand-text">Claude Code <em>Web</em></span>
-        <button class="icon-btn sidebar-close" title="关闭菜单" @click="mobileOpen = false">
+        <button class="icon-btn sidebar-close" :title="t('关闭菜单')" @click="mobileOpen = false">
           <Icon name="x" :size="18" />
         </button>
       </div>
 
       <button class="new-chat" @click="goNewSession">
         <Icon name="plus" :size="17" />
-        新建会话
+        {{ t('新建会话') }}
       </button>
 
       <div class="side-section">
         <div class="side-heading">
-          <span>最近会话</span>
-          <button class="icon-btn tiny" title="刷新" @click="refreshSessions()">
+          <span>{{ t('最近会话') }}</span>
+          <button class="icon-btn tiny" :title="t('刷新')" @click="refreshSessions()">
             <Icon name="refresh" :size="14" />
           </button>
         </div>
@@ -109,13 +110,13 @@ onUnmounted(() => {
           >
             <span class="status-dot" :class="statusTone(item.status)" />
             <span class="session-lines">
-              <span class="session-title">{{ item.title }}</span>
+              <span class="session-title">{{ item.title === '新会话' ? t('新会话') : item.title }}</span>
               <span class="session-sub">{{ prettyPath(item.cwd) }}</span>
             </span>
             <span class="session-time">{{ formatRelative(item.updatedAt) }}</span>
           </router-link>
           <div v-if="visibleSessions.length === 0" class="side-empty">
-            还没有会话。点上方「新建会话」开始。
+            {{ t('还没有会话。点上方「新建会话」开始。') }}
           </div>
         </nav>
       </div>
@@ -123,15 +124,19 @@ onUnmounted(() => {
       <div class="side-footer">
         <router-link to="/settings" class="side-action">
           <Icon name="settings" :size="16" />
-          设置
+          {{ t('设置') }}
         </router-link>
         <button class="side-action" @click="toggleTheme">
           <Icon :name="theme === 'dark' ? 'sun' : 'moon'" :size="16" />
-          {{ theme === 'dark' ? '浅色模式' : '深色模式' }}
+          {{ theme === 'dark' ? t('浅色模式') : t('深色模式') }}
+        </button>
+        <button class="side-action" @click="toggleLocale">
+          <Icon name="globe" :size="16" />
+          {{ locale === 'zh' ? 'English' : '中文' }}
         </button>
         <button class="side-action" :disabled="loggingOut" @click="logout">
           <Icon name="logout" :size="16" />
-          {{ loggingOut ? '退出中…' : '退出登录' }}
+          {{ loggingOut ? t('退出中…') : t('退出登录') }}
         </button>
         <div class="side-version">
           <span>v{{ version }}</span>
@@ -142,14 +147,14 @@ onUnmounted(() => {
 
     <div class="shell-body">
       <header class="mobile-bar">
-        <button class="icon-btn" title="菜单" @click="mobileOpen = true">
+        <button class="icon-btn" :title="t('菜单')" @click="mobileOpen = true">
           <Icon name="menu" :size="20" />
         </button>
         <span class="mobile-title">
           <Icon name="brand" :size="22" />
           Claude Code Web
         </span>
-        <button class="icon-btn" title="新建会话" @click="goNewSession">
+        <button class="icon-btn" :title="t('新建会话')" @click="goNewSession">
           <Icon name="plus" :size="20" />
         </button>
       </header>

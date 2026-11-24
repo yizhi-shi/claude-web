@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, api } from '../api';
 import Icon from '../components/Icon.vue';
+import { locale, t, toggleLocale, translateServerMessage } from '../i18n';
 import { authState, ensureAuth, initTheme, loadConfig } from '../store';
 
 const route = useRoute();
@@ -35,7 +36,7 @@ async function loadStatus(): Promise<void> {
       await router.replace(redirectTarget());
     }
   } catch (err) {
-    loadError.value = err instanceof ApiError ? err.message : '无法连接服务';
+    loadError.value = err instanceof ApiError ? translateServerMessage(err.message) : t('无法连接服务');
   } finally {
     statusLoaded.value = true;
   }
@@ -45,16 +46,16 @@ async function submit(): Promise<void> {
   if (busy.value) return;
   error.value = '';
   if (!username.value.trim() || !password.value) {
-    error.value = '请输入账号和密码';
+    error.value = t('请输入账号和密码');
     return;
   }
   if (setup.value) {
     if (password.value.length < 8) {
-      error.value = '密码至少 8 位';
+      error.value = t('密码至少 8 位');
       return;
     }
     if (password.value !== confirm.value) {
-      error.value = '两次输入的密码不一致';
+      error.value = t('两次输入的密码不一致');
       return;
     }
   }
@@ -70,10 +71,10 @@ async function submit(): Promise<void> {
     await router.replace(redirectTarget());
   } catch (err) {
     if (err instanceof ApiError) {
-      error.value = err.message;
+      error.value = translateServerMessage(err.message);
       if (err.status === 409 && setup.value) setup.value = false;
     } else {
-      error.value = '登录失败，请稍后重试';
+      error.value = t('登录失败，请稍后重试');
     }
   } finally {
     busy.value = false;
@@ -100,14 +101,14 @@ onMounted(async () => {
 
       <div class="auth-copy">
         <p class="eyebrow">SELF-HOSTED CONSOLE</p>
-        <h1>把你的 Claude Code<br />放进浏览器。</h1>
+        <h1>{{ t('把你的 Claude Code') }}<br />{{ t('放进浏览器。') }}</h1>
         <p class="auth-lead">
-          会话常驻服务端。刷新、切到手机、甚至关掉页面，正在执行的任务都不会中断。
+          {{ t('会话常驻服务端。刷新、切到手机、甚至关掉页面，正在执行的任务都不会中断。') }}
         </p>
         <ul class="auth-points">
-          <li><span class="point-icon"><Icon name="activity" :size="17" /></span>实时会话与执行状态</li>
-          <li><span class="point-icon"><Icon name="shield" :size="17" /></span>工具审批、命令与文件 diff</li>
-          <li><span class="point-icon"><Icon name="smartphone" :size="17" /></span>桌面与手机自适应布局</li>
+          <li><span class="point-icon"><Icon name="activity" :size="17" /></span>{{ t('实时会话与执行状态') }}</li>
+          <li><span class="point-icon"><Icon name="shield" :size="17" /></span>{{ t('工具审批、命令与文件 diff') }}</li>
+          <li><span class="point-icon"><Icon name="smartphone" :size="17" /></span>{{ t('桌面与手机自适应布局') }}</li>
         </ul>
       </div>
 
@@ -117,56 +118,59 @@ onMounted(async () => {
           <span>claude-web · session</span>
         </div>
         <div class="term-body">
-          <p><span class="term-prompt">$</span> claude "整理今天的发布记录"</p>
-          <p class="term-muted">● 读取仓库 · 12 个文件</p>
-          <p class="term-muted">● 运行测试 · 通过</p>
-          <p><span class="term-ok">✓</span> 已生成 CHANGELOG.md<span class="term-cursor" /></p>
+          <p><span class="term-prompt">$</span> claude "{{ t('整理今天的发布记录') }}"</p>
+          <p class="term-muted">● {{ t('读取仓库 · 12 个文件') }}</p>
+          <p class="term-muted">● {{ t('运行测试 · 通过') }}</p>
+          <p><span class="term-ok">✓</span> {{ t('已生成 CHANGELOG.md') }}<span class="term-cursor" /></p>
         </div>
       </div>
 
-      <p class="auth-foot">自托管 · 你的机器 · 你的数据</p>
+      <p class="auth-foot">{{ t('自托管 · 你的机器 · 你的数据') }}</p>
     </section>
 
     <section class="auth-panel">
       <div class="auth-card">
+        <button class="auth-lang" type="button" :title="t('切换语言')" @click="toggleLocale">
+          {{ locale === 'zh' ? 'English' : '中文' }}
+        </button>
         <div class="auth-mobile-brand">
           <span class="brand-mark"><Icon name="brand" :size="28" /></span>
           <span>Claude Code <em>Web</em></span>
         </div>
 
         <template v-if="statusLoaded">
-          <h2>{{ setup ? '初始化管理员' : '登录控制台' }}</h2>
+          <h2>{{ setup ? t('初始化管理员') : t('登录控制台') }}</h2>
           <p class="auth-sub">
-            {{ setup ? '首次使用，请设置管理员账号。' : '使用你的管理员账号继续。' }}
+            {{ setup ? t('首次使用，请设置管理员账号。') : t('使用你的管理员账号继续。') }}
           </p>
 
           <form class="auth-form" @submit.prevent="submit">
             <label class="field">
-              <span>账号</span>
+              <span>{{ t('账号') }}</span>
               <input
                 v-model="username"
                 type="text"
                 autocomplete="username"
-                placeholder="输入管理员账号"
+                :placeholder="t('输入管理员账号')"
                 :disabled="busy"
                 autofocus
               />
             </label>
 
             <label class="field">
-              <span>密码</span>
+              <span>{{ t('密码') }}</span>
               <span class="password-wrap">
                 <input
                   v-model="password"
                   :type="showPassword ? 'text' : 'password'"
                   :autocomplete="setup ? 'new-password' : 'current-password'"
-                  placeholder="输入密码"
+                  :placeholder="t('输入密码')"
                   :disabled="busy"
                 />
                 <button
                   type="button"
                   class="password-toggle"
-                  :title="showPassword ? '隐藏密码' : '显示密码'"
+                  :title="showPassword ? t('隐藏密码') : t('显示密码')"
                   @click="showPassword = !showPassword"
                 >
                   <Icon :name="showPassword ? 'eyeOff' : 'eye'" :size="17" />
@@ -175,12 +179,12 @@ onMounted(async () => {
             </label>
 
             <label v-if="setup" class="field">
-              <span>确认密码</span>
+              <span>{{ t('确认密码') }}</span>
               <input
                 v-model="confirm"
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="new-password"
-                placeholder="再次输入密码"
+                :placeholder="t('再次输入密码')"
                 :disabled="busy"
               />
             </label>
@@ -188,25 +192,50 @@ onMounted(async () => {
             <p v-if="error" class="form-error"><Icon name="alert" :size="15" />{{ error }}</p>
 
             <button class="btn primary block auth-submit" type="submit" :disabled="busy">
-              {{ busy ? '请稍候…' : setup ? '创建并进入' : '登录' }}
+              {{ busy ? t('请稍候…') : setup ? t('创建并进入') : t('登录') }}
               <Icon v-if="!busy" name="chevronRight" :size="16" />
             </button>
           </form>
 
           <p v-if="setup" class="auth-note">
-            账号只保存在本机 <code>data/auth.json</code>（bcrypt 哈希），不会进入 Git 仓库。
+            {{ t('账号只保存在本机') }} <code>data/auth.json</code>{{ t('（bcrypt 哈希），不会进入 Git 仓库。') }}
           </p>
-          <p v-else class="auth-note">连续 5 次密码错误会锁定该账号 1 小时。</p>
+          <p v-else class="auth-note">{{ t('连续 5 次密码错误会锁定该账号 1 小时。') }}</p>
         </template>
 
         <template v-else>
-          <h2>连接服务</h2>
-          <p class="auth-sub">正在检查登录状态…</p>
+          <h2>{{ t('连接服务') }}</h2>
+          <p class="auth-sub">{{ t('正在检查登录状态…') }}</p>
           <p v-if="loadError" class="form-error"><Icon name="alert" :size="15" />{{ loadError }}</p>
-          <button v-if="loadError" class="btn secondary block" @click="loadStatus">重试</button>
+          <button v-if="loadError" class="btn secondary block" @click="loadStatus">{{ t('重试') }}</button>
         </template>
       </div>
-      <p class="auth-legal">仅限授权用户。所有操作都在本机执行。</p>
+      <p class="auth-legal">{{ t('仅限授权用户。所有操作都在本机执行。') }}</p>
     </section>
   </div>
 </template>
+
+<style scoped>
+.auth-card {
+  position: relative;
+}
+
+.auth-lang {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.auth-lang:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+</style>

@@ -114,6 +114,6 @@ export function childEnv(): Record<string, string> {
     if (value === undefined || drop.has(key)) continue;
     env[key] = value;
   }
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.9.0';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.10.0';
   return env;
 }

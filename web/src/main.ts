@@ -1,10 +1,12 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
+import { initLocale } from './i18n';
 import { initTheme, type ThemeMode } from './store';
 import './styles.css';
 
 async function boot(): Promise<void> {
+  initLocale();
   let mode: ThemeMode = 'system';
   try {
     const response = await fetch('/api/auth/status', { credentials: 'same-origin' });

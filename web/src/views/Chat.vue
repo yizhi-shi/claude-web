@@ -10,6 +10,7 @@ import PlanPanel from '../components/PlanPanel.vue';
 import QuestionPanel from '../components/QuestionPanel.vue';
 import VoiceControl from '../components/VoiceControl.vue';
 import { buildChatItems } from '../chatModel';
+import { t, translateServerMessage } from '../i18n';
 import { appConfig, loadConfig, refreshSessions, toast } from '../store';
 import type {
   AttachmentRef,
@@ -333,14 +334,16 @@ interface MenuItem {
 }
 
 const items = computed(() => buildChatItems(events.value));
-const title = computed(() => state.value?.title || '新会话');
+const title = computed(() => state.value?.title || t('新会话'));
 const status = computed(() => state.value?.status ?? 'idle');
 const running = computed(() => status.value === 'running' || status.value === 'waiting_permission');
-const modeLabel = computed(
-  () =>
-    appConfig.value?.permissionModes.find((mode) => mode.value === state.value?.permissionMode)?.label ??
-    state.value?.permissionMode ??
-    '',
+const modeLabel = computed(() =>
+  t(
+    appConfig.value?.permissionModes.find((mode) => mode.value === state.value?.permissionMode)
+      ?.label ??
+      state.value?.permissionMode ??
+      '',
+  ),
 );
 const contextPercent = computed(() =>
   Math.round(state.value?.contextUsage?.percentage ?? 0),
@@ -348,7 +351,7 @@ const contextPercent = computed(() =>
 const contextTitle = computed(() => {
   const usage = state.value?.contextUsage;
   if (!usage) return '';
-  return `上下文 ${formatTokens(usage.totalTokens)} / ${formatTokens(usage.maxTokens)}`;
+  return t('上下文 {used} / {max}', { used: formatTokens(usage.totalTokens), max: formatTokens(usage.maxTokens) });
 });
 const elapsedText = computed(() => {
   const started = state.value?.turnStartedAt;
@@ -360,18 +363,18 @@ const activeTasks = computed(
 );
 const activeToolList = computed(() => state.value?.activeTools ?? []);
 const runtimeLabel = computed(() => {
-  if (pendingQuestion.value) return '等待你的回答';
-  if (pendingPlan.value) return '计划待确认';
+  if (pendingQuestion.value) return t('等待你的回答');
+  if (pendingPlan.value) return t('计划待确认');
   if (state.value?.statusDetail) return state.value.statusDetail;
   if (activeToolList.value.length > 0) {
     const names = activeToolList.value.map((tool) => tool.name).slice(0, 3);
-    return `正在执行 ${names.join('、')}${activeToolList.value.length > 3 ? ' 等' : ''}`;
+    return t('正在执行 {names}', { names: `${names.join(', ')}${activeToolList.value.length > 3 ? '…' : ''}` });
   }
-  if (state.value?.currentTool) return `正在执行 ${state.value.currentTool.name}`;
-  if (status.value === 'waiting_permission') return '等待你的批准';
-  return 'Claude 正在处理';
+  if (state.value?.currentTool) return t('正在执行 {name}', { name: state.value.currentTool.name });
+  if (status.value === 'waiting_permission') return t('等待你的批准');
+  return t('Claude 正在处理');
 });
-const examples = ['总结这个项目的结构', '运行测试并修复失败项', '解释最近一次 git 提交'];
+const examples = computed(() => [t('总结这个项目的结构'), t('运行测试并修复失败项'), t('解释最近一次 git 提交')]);
 
 watch(status, (value) => {
   if (value !== 'running' && value !== 'waiting_permission') clearStopState();
@@ -386,7 +389,7 @@ const slashCommands = computed(() => {
   for (const command of builtinCommands) {
     if (seen.has(command.name)) continue;
     seen.add(command.name);
-    out.push({ name: command.name, description: command.description, kind: 'command' });
+    out.push({ name: command.name, description: t(command.description), kind: 'command' });
   }
 
   for (const detail of state.value?.commandDetails ?? []) {
@@ -397,8 +400,8 @@ const slashCommands = computed(() => {
       name,
       description:
         (detail.description ?? '').replace(/\s*\((user|project|plugin)\)\s*$/, '') ||
-        builtinMap.get(name) ||
-        '命令',
+        (builtinMap.get(name) ? t(builtinMap.get(name) as string) : '') ||
+        t('命令'),
       kind: skills.has(name) ? 'skill' : 'command',
     });
   }
@@ -409,7 +412,7 @@ const slashCommands = computed(() => {
     seen.add(name);
     out.push({
       name,
-      description: builtinMap.get(name) ?? (skills.has(name) ? '技能' : '命令'),
+      description: (builtinMap.get(name) ? t(builtinMap.get(name) as string) : '') || (skills.has(name) ? t('技能') : t('命令')),
       kind: skills.has(name) ? 'skill' : 'command',
     });
   }
@@ -584,7 +587,7 @@ function handleSocketMessage(message: Record<string, unknown>): void {
     const exchange = sideExchanges.value.find(
       (item) => item.requestId === String(message.requestId ?? ''),
     );
-    const text = String(message.message ?? '旁问失败');
+    const text = String(message.message ?? t('旁问失败'));
     if (exchange) {
       exchange.status = text === '旁问已取消' ? 'canceled' : 'error';
       exchange.error = text;
@@ -596,9 +599,9 @@ function handleSocketMessage(message: Record<string, unknown>): void {
   }
   if (type === 'side.started') return;
   if (type === 'error') {
-    const text = String(message.message ?? '连接出错');
+    const text = translateServerMessage(String(message.message ?? t('连接出错')));
     toast(text, 'error');
-    if (text.includes('不存在')) error.value = text;
+    if (text.includes('不存在') || /not found/i.test(text)) error.value = text;
     return;
   }
 }
@@ -646,7 +649,7 @@ function applySideEffects(event: StoredEvent): void {
   if (event.type === 'permission.resolved') {
     resolvedRequests.add(event.requestId);
     if (pending.value?.requestId === event.requestId) pending.value = null;
-    if (event.decision === 'timeout') toast('审批超时，已自动拒绝', 'error');
+    if (event.decision === 'timeout') toast(t('审批超时，已自动拒绝'), 'error');
     return;
   }
   if (event.type === 'question.request') {
@@ -657,7 +660,7 @@ function applySideEffects(event: StoredEvent): void {
   if (event.type === 'question.resolved') {
     resolvedQuestions.add(event.requestId);
     if (pendingQuestion.value?.requestId === event.requestId) pendingQuestion.value = null;
-    if (event.timedOut) toast('问答超时，已让 Claude 自行判断', 'info');
+    if (event.timedOut) toast(t('问答超时，已让 Claude 自行判断'), 'info');
     return;
   }
   if (event.type === 'plan.request') {
@@ -668,7 +671,7 @@ function applySideEffects(event: StoredEvent): void {
   if (event.type === 'plan.resolved') {
     resolvedPlans.add(event.requestId);
     if (pendingPlan.value?.requestId === event.requestId) pendingPlan.value = null;
-    if (event.timedOut) toast('计划确认超时，已按拒绝处理', 'info');
+    if (event.timedOut) toast(t('计划确认超时，已按拒绝处理'), 'info');
     return;
   }
   if (event.type === 'turn.result') {
@@ -767,7 +770,7 @@ async function load(): Promise<void> {
     scrollToBottom(true);
     await connect();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : '无法载入会话';
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('无法载入会话');
   } finally {
     loading.value = false;
   }
@@ -793,7 +796,7 @@ async function loadEarlier(): Promise<void> {
     await nextTick();
     if (container) container.scrollTop += container.scrollHeight - previousHeight;
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '加载历史失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('加载历史失败'), 'error');
   } finally {
     loadingEarlier.value = false;
   }
@@ -850,7 +853,7 @@ function fileToBase64(file: File): Promise<string> {
       const comma = result.indexOf(',');
       resolve(comma >= 0 ? result.slice(comma + 1) : result);
     };
-    reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
+    reader.onerror = () => reject(reader.error ?? new Error(t('读取文件失败')));
     reader.readAsDataURL(file);
   });
 }
@@ -859,27 +862,27 @@ async function addFiles(files: File[]): Promise<void> {
   if (files.length === 0) return;
   const room = MAX_ATTACHMENTS - attachments.value.length;
   if (room <= 0) {
-    toast(`单条消息最多 ${MAX_ATTACHMENTS} 个附件`, 'error');
+    toast(t('单条消息最多 {n} 个附件', { n: MAX_ATTACHMENTS }), 'error');
     return;
   }
   if (files.length > room) {
-    toast(`单条消息最多 ${MAX_ATTACHMENTS} 个附件，已忽略多余文件`, 'info');
+    toast(t('单条消息最多 {n} 个附件，已忽略多余文件', { n: MAX_ATTACHMENTS }), 'info');
   }
 
   for (const file of files.slice(0, room)) {
     if (file.size === 0) {
-      toast(`${file.name || '文件'} 是空文件，已跳过`, 'error');
+      toast(t('{name} 是空文件，已跳过', { name: file.name || t('文件') }), 'error');
       continue;
     }
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      toast(`${file.name || '文件'} 超过 10 MB，已跳过`, 'error');
+      toast(t('{name} 超过 10 MB，已跳过', { name: file.name || t('文件') }), 'error');
       continue;
     }
 
     const isImage = IMAGE_TYPES.has(file.type);
     const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
-    const displayName = file.name || (isImage ? '粘贴的图片' : '粘贴的文件');
+    const displayName = file.name || (isImage ? t('粘贴的图片') : t('粘贴的文件'));
     attachments.value.push({
       id: tempId,
       name: displayName,
@@ -907,7 +910,7 @@ async function addFiles(files: File[]): Promise<void> {
       const index = attachments.value.findIndex((item) => item.id === tempId);
       if (index >= 0) attachments.value.splice(index, 1);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
-      toast(err instanceof ApiError ? err.message : `${displayName} 上传失败`, 'error');
+      toast(err instanceof ApiError ? translateServerMessage(err.message) : t('{name} 上传失败', { name: displayName }), 'error');
     } finally {
       uploadingCount.value = Math.max(0, uploadingCount.value - 1);
     }
@@ -1003,7 +1006,7 @@ function askSide(): void {
   const text = sideDraft.value.trim().replace(/^\/btw(?:\s+|$)/, '').trim();
   if (!text || sideBusy.value) return;
   if (ws?.readyState !== WebSocket.OPEN) {
-    toast('连接已断开，暂时无法旁问', 'error');
+    toast(t('连接已断开，暂时无法旁问'), 'error');
     return;
   }
   const requestId = `side-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1040,7 +1043,7 @@ function markSideDisconnected(): void {
   const current = sideExchanges.value.find((item) => item.status === 'running');
   if (!current) return;
   current.status = 'error';
-  current.error = '连接中断，旁问未完成';
+  current.error = t('连接中断，旁问未完成');
   sideBusy.value = false;
 }
 
@@ -1062,7 +1065,7 @@ async function send(): Promise<void> {
   // panel instead of sending the literal text into the main conversation.
   if (/^\/btw(?:\s|$)/.test(text)) {
     if (attachmentIds.length > 0) {
-      toast('旁问暂不支持附件，请先移除附件', 'error');
+      toast(t('旁问暂不支持附件，请先移除附件'), 'error');
       return;
     }
     const question = text.replace(/^\/btw(?:\s+|$)/, '').trim();
@@ -1091,7 +1094,7 @@ async function send(): Promise<void> {
     stickToBottom.value = true;
     scrollToBottom(true);
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '发送失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('发送失败'), 'error');
   } finally {
     sending.value = false;
   }
@@ -1108,25 +1111,25 @@ async function interrupt(): Promise<void> {
     }
     // Do not wait for the next state push to give feedback: the SDK may need
     // a moment to unwind a tool, and a silent button feels broken.
-    toast('已请求停止当前回合…', 'info', 1800);
+    toast(t('已请求停止当前回合…'), 'info', 1800);
   } catch (err) {
     clearStopState();
-    toast(err instanceof ApiError ? err.message : '停止失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('停止失败'), 'error');
   }
 }
 
 async function forceStop(): Promise<void> {
-  if (!window.confirm('强制结束后台进程？聊天记录会保留，下次发送会自动恢复。')) return;
+  if (!window.confirm(t('强制结束后台进程？聊天记录会保留，下次发送会自动恢复。'))) return;
   settingsOpen.value = false;
   try {
     const next = await api.stopSession(sessionId.value);
     state.value = next;
     clearStopState();
-    toast('已强制结束后台进程');
+    toast(t('已强制结束后台进程'));
     await refreshSessions();
     await reload();
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '强制结束失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('强制结束失败'), 'error');
   }
 }
 
@@ -1148,10 +1151,10 @@ async function respond(decision: 'allow_once' | 'allow_session' | 'deny'): Promi
       await api.respondPermission(sessionId.value, request.requestId, decision);
     }
     pending.value = null;
-    if (decision === 'deny') toast('已拒绝这次操作');
+    if (decision === 'deny') toast(t('已拒绝这次操作'));
   } catch (err) {
     resolvedRequests.delete(request.requestId);
-    toast(err instanceof ApiError ? err.message : '审批失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('审批失败'), 'error');
   } finally {
     permissionBusy.value = false;
   }
@@ -1177,7 +1180,7 @@ async function answerQuestion(answers: Record<string, string>): Promise<void> {
     pendingQuestion.value = null;
   } catch (err) {
     resolvedQuestions.delete(request.requestId);
-    toast(err instanceof ApiError ? err.message : '提交回答失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('提交回答失败'), 'error');
   } finally {
     questionBusy.value = false;
   }
@@ -1197,7 +1200,7 @@ async function skipQuestion(): Promise<void> {
     pendingQuestion.value = null;
   } catch (err) {
     resolvedQuestions.delete(request.requestId);
-    toast(err instanceof ApiError ? err.message : '跳过失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('跳过失败'), 'error');
   } finally {
     questionBusy.value = false;
   }
@@ -1222,10 +1225,10 @@ async function decidePlan(approved: boolean, feedback?: string): Promise<void> {
       await api.respondPlan(sessionId.value, request.requestId, approved, feedback);
     }
     pendingPlan.value = null;
-    toast(approved ? '已批准计划，开始执行' : '已退回计划，继续完善');
+    toast(approved ? t('已批准计划，开始执行') : t('已退回计划，继续完善'));
   } catch (err) {
     resolvedPlans.delete(request.requestId);
-    toast(err instanceof ApiError ? err.message : '计划确认失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('计划确认失败'), 'error');
   } finally {
     planBusy.value = false;
   }
@@ -1241,9 +1244,9 @@ async function chooseMode(mode: PermissionMode): Promise<void> {
       await api.setMode(sessionId.value, mode);
     }
     if (state.value) state.value.permissionMode = mode;
-    toast('权限模式已更新');
+    toast(t('权限模式已更新'));
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '切换失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('切换失败'), 'error');
   } finally {
     modeBusy.value = false;
   }
@@ -1278,7 +1281,7 @@ async function refreshContextNow(): Promise<void> {
       state.value.contextUsage = result.contextUsage;
     }
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '读取上下文用量失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('读取上下文用量失败'), 'error');
   } finally {
     contextRefreshing.value = false;
   }
@@ -1294,7 +1297,7 @@ async function loadExtensions(): Promise<void> {
     if (sessionId.value === target) extensionsView.value = view;
   } catch (err) {
     if (sessionId.value === target) {
-      extensionsError.value = err instanceof ApiError ? err.message : '读取扩展失败';
+      extensionsError.value = err instanceof ApiError ? translateServerMessage(err.message) : t('读取扩展失败');
     }
   } finally {
     extensionsLoading.value = false;
@@ -1308,11 +1311,11 @@ function refreshExtensions(): void {
 function mcpStatusLabel(status: McpServerView['status']): string {
   return (
     {
-      connected: '已连接',
-      failed: '失败',
-      'needs-auth': '需要认证',
-      pending: '连接中',
-      disabled: '已停用',
+      connected: t('已连接'),
+      failed: t('失败'),
+      'needs-auth': t('需要认证'),
+      pending: t('连接中'),
+      disabled: t('已停用'),
     }[status] ?? status
   );
 }
@@ -1339,9 +1342,9 @@ async function toggleMcp(server: McpServerView): Promise<void> {
   mcpBusy.value = server.name;
   try {
     extensionsView.value = await api.toggleMcp(sessionId.value, server.name, enabled);
-    toast(`已${enabled ? '启用' : '停用'} MCP：${server.name}`, 'success');
+    toast(t(enabled ? '已启用 MCP：{name}' : '已停用 MCP：{name}', { name: server.name }), 'success');
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '切换 MCP 失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('切换 MCP 失败'), 'error');
   } finally {
     mcpBusy.value = '';
   }
@@ -1352,9 +1355,9 @@ async function reconnectMcp(server: McpServerView): Promise<void> {
   mcpBusy.value = server.name;
   try {
     extensionsView.value = await api.reconnectMcp(sessionId.value, server.name);
-    toast(`已请求重连 MCP：${server.name}`, 'success');
+    toast(t('已请求重连 MCP：{name}', { name: server.name }), 'success');
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '重连 MCP 失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('重连 MCP 失败'), 'error');
   } finally {
     mcpBusy.value = '';
   }
@@ -1371,10 +1374,10 @@ async function applyModel(value: string): Promise<void> {
       await api.setModel(sessionId.value, model);
     }
     settingsModel.value = model;
-    toast(model ? `模型切换请求已发送：${model}` : '已请求恢复默认模型', 'success');
+    toast(model ? t('模型切换请求已发送：{model}', { model }) : t('已请求恢复默认模型'), 'success');
     settingsOpen.value = false;
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '切换模型失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('切换模型失败'), 'error');
   } finally {
     modelBusy.value = false;
   }
@@ -1405,7 +1408,7 @@ function handleWebCommand(text: string): boolean {
   if (!webCommandNames.has(name) && !webCommandAliases.has(name)) return false;
 
   if (attachments.value.length > 0) {
-    toast('该命令不支持附件，请先移除附件', 'error');
+    toast(t('该命令不支持附件，请先移除附件'), 'error');
     return true;
   }
 
@@ -1429,14 +1432,14 @@ function handleWebCommand(text: string): boolean {
       break;
     case 'config':
       openSessionPanel('model');
-      toast('Web 端可配置模型、权限与会话状态；其他 CLI 配置请使用设置页或终端', 'info', 3600);
+      toast(t('Web 端可配置模型、权限与会话状态；其他 CLI 配置请使用设置页或终端'), 'info', 3600);
       break;
     case 'mcp':
     case 'agents':
     case 'list-agents':
       openSessionPanel('extensions');
       if (arg) {
-        toast('Web 面板用于查看/重连/启停；添加、认证等子命令请在终端执行', 'info', 3600);
+        toast(t('Web 面板用于查看/重连/启停；添加、认证等子命令请在终端执行'), 'info', 3600);
       }
       break;
     case 'help':
@@ -1768,11 +1771,11 @@ onUnmounted(() => {
     >
       <div v-if="dragActive" class="drop-overlay">
         <Icon name="paperclip" :size="22" />
-        <span>松开即可添加附件</span>
+        <span>{{ t('松开即可添加附件') }}</span>
       </div>
       <header class="chat-head">
         <div class="chat-head-left">
-          <button class="icon-btn back-mobile" title="返回" @click="router.push('/')">
+          <button class="icon-btn back-mobile" :title="t('返回')" @click="router.push('/')">
             <Icon name="arrowLeft" :size="19" />
           </button>
           <div class="chat-title-wrap">
@@ -1798,7 +1801,7 @@ onUnmounted(() => {
             <span class="context-bar"><span :style="{ width: `${Math.min(100, contextPercent)}%` }" /></span>
             <span>{{ contextPercent }}%</span>
           </div>
-          <span class="meta-chip">{{ state?.model || '默认模型' }}</span>
+          <span class="meta-chip">{{ state?.model || t('默认模型') }}</span>
           <span
             class="meta-chip mode"
             :class="{ danger: state?.permissionMode === 'bypassPermissions' }"
@@ -1806,13 +1809,13 @@ onUnmounted(() => {
           <button
             class="meta-chip side-entry"
             :class="{ active: sideOpen }"
-            title="旁问：基于当前上下文回答，不打断当前任务"
+            :title="t('旁问：基于当前上下文回答，不打断当前任务')"
             @click="toggleSide"
           >
             <Icon name="spark" :size="13" />
-            <span>旁问</span>
+            <span>{{ t('旁问') }}</span>
           </button>
-          <button class="icon-btn" title="会话设置" @click="toggleSessionSettings">
+          <button class="icon-btn" :title="t('会话设置')" @click="toggleSessionSettings">
             <Icon name="settings" :size="18" />
           </button>
         </div>
@@ -1820,7 +1823,7 @@ onUnmounted(() => {
 
       <div v-if="reconnecting && !connected" class="conn-banner">
         <span class="spinner tiny" />
-        连接中断，正在重连… 后台任务仍在服务端运行
+        {{ t('连接中断，正在重连… 后台任务仍在服务端运行') }}
       </div>
 
       <div
@@ -1843,25 +1846,25 @@ onUnmounted(() => {
           <span v-if="task.lastToolName" class="task-tool">{{ task.lastToolName }}</span>
         </span>
         <span class="run-spacer" />
-        <span v-if="stopping && stopSlow" class="run-slow">工具仍在退出</span>
+        <span v-if="stopping && stopSlow" class="run-slow">{{ t('工具仍在退出') }}</span>
         <button
           v-if="stopSlow"
           class="run-stop force"
-          title="强制结束后台进程"
+          :title="t('强制结束后台进程')"
           @click="forceStop"
         >
-          强制结束
+          {{ t('强制结束') }}
         </button>
         <button
           v-if="running"
           class="run-stop"
           :disabled="stopping"
-          title="停止当前回合（Esc）"
+          :title="t('停止当前回合（Esc）')"
           @click="interrupt"
         >
           <span v-if="stopping" class="spinner tiny" />
           <Icon v-else name="stop" :size="12" />
-          {{ stopping ? '停止中…' : '停止' }}
+          {{ stopping ? t('停止中…') : t('停止') }}
         </button>
       </div>
 
@@ -1874,32 +1877,32 @@ onUnmounted(() => {
             @click="loadEarlier"
           >
             <span v-if="loadingEarlier" class="spinner tiny" />
-            {{ loadingEarlier ? '加载中…' : '加载更早的消息' }}
+            {{ loadingEarlier ? t('加载中…') : t('加载更早的消息') }}
           </button>
 
           <div v-if="loading" class="thread-loading">
             <span class="spinner" />
-            正在载入会话…
+            {{ t('正在载入会话…') }}
           </div>
 
           <div v-else-if="error" class="thread-error">
             <span class="empty-mark"><Icon name="alert" :size="26" /></span>
-            <h3>无法打开会话</h3>
+            <h3>{{ t('无法打开会话') }}</h3>
             <p>{{ error }}</p>
-            <button class="btn secondary" @click="router.push('/')">返回会话列表</button>
+            <button class="btn secondary" @click="router.push('/')">{{ t('返回会话列表') }}</button>
           </div>
 
           <div v-else-if="items.length === 0" class="chat-empty">
             <span class="empty-mark large"><Icon name="brand" :size="34" /></span>
-            <h2>开始和 Claude 对话</h2>
-            <p>当前目录：<code>{{ prettyPath(state?.cwd ?? '') }}</code></p>
+            <h2>{{ t('开始和 Claude 对话') }}</h2>
+            <p>{{ t('当前目录：') }}<code>{{ prettyPath(state?.cwd ?? '') }}</code></p>
             <div class="example-row">
               <button v-for="example in examples" :key="example" class="example-chip" @click="useExample(example)">
                 {{ example }}
               </button>
             </div>
             <p class="empty-hint">
-              输入 <code>/</code> 选择命令或技能，输入 <code>@</code> 引用文件；敏感操作会先请你批准。
+              {{ t('输入') }} <code>/</code> {{ t('选择命令或技能，输入') }} <code>@</code> {{ t('引用文件；敏感操作会先请你批准。') }}
             </p>
           </div>
 
@@ -1914,7 +1917,7 @@ onUnmounted(() => {
 
         <button v-if="!stickToBottom" class="scroll-bottom" @click="scrollToBottom(true)">
           <Icon name="chevronDown" :size="16" />
-          回到底部
+          {{ t('回到底部') }}
         </button>
       </div>
 
@@ -1945,9 +1948,9 @@ onUnmounted(() => {
         <div class="composer">
           <div v-if="menuType !== 'none'" class="suggest-menu">
             <div class="suggest-head">
-              <span>{{ menuType === 'slash' ? '命令与技能' : '引用文件' }}</span>
+              <span>{{ menuType === 'slash' ? t('命令与技能') : t('引用文件') }}</span>
               <span v-if="menuLoading" class="spinner tiny" />
-              <button class="icon-btn tiny" title="关闭" @click="closeMenu">
+              <button class="icon-btn tiny" :title="t('关闭')" @click="closeMenu">
                 <Icon name="x" :size="13" />
               </button>
             </div>
@@ -1971,7 +1974,7 @@ onUnmounted(() => {
               <span class="suggest-insert">{{ menuItem.insert.trim() }}</span>
             </button>
             <div v-if="menuItems.length === 0 && !menuLoading" class="suggest-empty">
-              没有匹配项
+              {{ t('没有匹配项') }}
             </div>
           </div>
 
@@ -1997,7 +2000,7 @@ onUnmounted(() => {
               <span v-if="attachment.uploading" class="spinner tiny" />
               <button
                 class="icon-btn tiny attachment-remove"
-                title="移除附件"
+                :title="t('移除附件')"
                 @click="removeAttachment(attachment.id)"
               >
                 <Icon name="x" :size="12" />
@@ -2010,7 +2013,7 @@ onUnmounted(() => {
             v-model="draft"
             class="composer-input"
             rows="1"
-            placeholder="给 Claude 一个任务，输入 / 命令、@ 文件，或粘贴/拖入附件…"
+            :placeholder="t('给 Claude 一个任务，输入 / 命令、@ 文件，或粘贴/拖入附件…')"
             spellcheck="false"
             @input="onInput"
             @keydown="onKeydown"
@@ -2019,17 +2022,17 @@ onUnmounted(() => {
 
           <div class="composer-bar">
             <div class="composer-tools">
-              <button class="tool-btn" title="命令与技能" @click="openSymbol('/')">
+              <button class="tool-btn" :title="t('命令与技能')" @click="openSymbol('/')">
                 <Icon name="command" :size="16" />
-                <span>命令</span>
+                <span>{{ t('命令') }}</span>
               </button>
-              <button class="tool-btn" title="引用文件" @click="openSymbol('@')">
+              <button class="tool-btn" :title="t('引用文件')" @click="openSymbol('@')">
                 <Icon name="at" :size="16" />
-                <span>文件</span>
+                <span>{{ t('文件') }}</span>
               </button>
-              <button class="tool-btn" title="添加附件（图片或文件）" @click="pickFiles">
+              <button class="tool-btn" :title="t('添加附件（图片或文件）')" @click="pickFiles">
                 <Icon name="paperclip" :size="16" />
-                <span>附件</span>
+                <span>{{ t('附件') }}</span>
               </button>
               <input
                 ref="fileInputRef"
@@ -2045,23 +2048,23 @@ onUnmounted(() => {
                 @end="finishVoiceEdit"
               />
             </div>
-            <span class="composer-hint">Enter 发送 · Shift+Enter 换行 · Esc 停止</span>
+            <span class="composer-hint">{{ t('Enter 发送 · Shift+Enter 换行 · Esc 停止') }}</span>
             <span class="composer-spacer" />
-            <span v-if="running && !stopping" class="queue-hint">发送会排在当前步骤之后</span>
+            <span v-if="running && !stopping" class="queue-hint">{{ t('发送会排在当前步骤之后') }}</span>
             <button
               v-if="running"
               class="btn ghost small composer-stop"
               :disabled="stopping"
-              title="停止当前回合（Esc）"
+              :title="t('停止当前回合（Esc）')"
               @click="interrupt"
             >
               <span v-if="stopping" class="spinner tiny" />
               <Icon v-else name="stop" :size="13" />
-              {{ stopping ? '停止中…' : '停止' }}
+              {{ stopping ? t('停止中…') : t('停止') }}
             </button>
             <button class="btn primary send-btn" :disabled="!canSend" @click="send">
               <Icon name="send" :size="15" />
-              {{ running ? '排队发送' : '发送' }}
+              {{ running ? t('排队发送') : t('发送') }}
             </button>
           </div>
         </div>
@@ -2078,9 +2081,9 @@ onUnmounted(() => {
           class="side-resize-handle"
           role="separator"
           aria-orientation="horizontal"
-          aria-label="调整旁问高度"
+          :aria-label="t('调整旁问高度')"
           tabindex="0"
-          title="拖动调整高度，双击还原"
+          :title="t('拖动调整高度，双击还原')"
           @pointerdown="startSideResize"
           @keydown="onSideResizeKey"
           @dblclick="resetSideHeight"
@@ -2088,16 +2091,16 @@ onUnmounted(() => {
           <span class="side-resize-grip" />
         </div>
         <header class="side-head">
-          <span class="side-title"><Icon name="spark" :size="14" />旁问</span>
-          <span class="side-note">当前上下文 · 不写入主对话</span>
-          <button class="icon-btn tiny" title="关闭旁问" @click="sideOpen = false">
+          <span class="side-title"><Icon name="spark" :size="14" />{{ t('旁问') }}</span>
+          <span class="side-note">{{ t('当前上下文 · 不写入主对话') }}</span>
+          <button class="icon-btn tiny" :title="t('关闭旁问')" @click="sideOpen = false">
             <Icon name="x" :size="13" />
           </button>
         </header>
 
         <div ref="sideListRef" class="side-list">
           <p v-if="sideExchanges.length === 0" class="side-empty">
-            在当前任务运行中问一个快速问题。旁问会读取已经落盘的对话上下文，不能调用工具，也不会打断当前回合或写入主对话。
+            {{ t('在当前任务运行中问一个快速问题。旁问会读取已经落盘的对话上下文，不能调用工具，也不会打断当前回合或写入主对话。') }}
           </p>
           <div
             v-for="exchange in sideExchanges"
@@ -2106,7 +2109,7 @@ onUnmounted(() => {
           >
             <div class="side-question">{{ exchange.question }}</div>
             <details v-if="exchange.thinking" class="side-thinking">
-              <summary>思考过程</summary>
+              <summary>{{ t('思考过程') }}</summary>
               <pre>{{ exchange.thinking }}</pre>
             </details>
             <div
@@ -2116,17 +2119,17 @@ onUnmounted(() => {
             />
             <div v-else-if="exchange.status === 'running'" class="side-wait">
               <span class="spinner tiny" />
-              正在回答…
+              {{ t('正在回答…') }}
             </div>
             <div v-if="exchange.status === 'error'" class="side-error">
               <Icon name="alert" :size="13" />
-              <span>{{ exchange.error || '旁问失败' }}</span>
+              <span>{{ exchange.error || t('旁问失败') }}</span>
             </div>
-            <div v-else-if="exchange.status === 'canceled'" class="side-canceled">已取消</div>
+            <div v-else-if="exchange.status === 'canceled'" class="side-canceled">{{ t('已取消') }}</div>
             <div v-if="exchange.status === 'done'" class="side-meta">
               <span v-if="formatCost(exchange.costUsd)">{{ formatCost(exchange.costUsd) }}</span>
               <span v-if="formatDuration(exchange.durationMs)">{{ formatDuration(exchange.durationMs) }}</span>
-              <span>未写入主对话</span>
+              <span>{{ t('未写入主对话') }}</span>
             </div>
           </div>
         </div>
@@ -2137,19 +2140,19 @@ onUnmounted(() => {
             v-model="sideDraft"
             class="side-input"
             rows="2"
-            placeholder="问一个旁支问题…（Enter 发送，Shift+Enter 换行）"
+            :placeholder="t('问一个旁支问题…（Enter 发送，Shift+Enter 换行）')"
             :disabled="sideBusy"
             @keydown="onSideKeydown"
           />
           <div class="side-actions">
-            <span class="side-hint">基于当前上下文</span>
-            <button v-if="sideBusy" class="btn ghost small" @click="cancelSide">取消</button>
+            <span class="side-hint">{{ t('基于当前上下文') }}</span>
+            <button v-if="sideBusy" class="btn ghost small" @click="cancelSide">{{ t('取消') }}</button>
             <button
               class="btn primary small"
               :disabled="!sideDraft.trim() || sideBusy || !connected"
               @click="askSide"
             >
-              提问
+              {{ t('提问') }}
             </button>
           </div>
         </div>
@@ -2158,7 +2161,7 @@ onUnmounted(() => {
       <div v-if="settingsOpen" class="popover-backdrop" @click="settingsOpen = false" />
       <div v-if="settingsOpen" class="session-popover settings-popover">
         <div class="popover-head">
-          <span>会话设置</span>
+          <span>{{ t('会话设置') }}</span>
           <button class="icon-btn tiny" @click="settingsOpen = false">
             <Icon name="x" :size="15" />
           </button>
@@ -2172,14 +2175,14 @@ onUnmounted(() => {
             :class="{ active: settingsTab === tab.value }"
             @click="selectSettingsTab(tab.value)"
           >
-            {{ tab.label }}
+            {{ t(tab.label) }}
           </button>
         </div>
 
         <template v-if="settingsTab === 'model'">
           <div class="popover-current">
-            <span class="mini-label">当前模型</span>
-            <code>{{ state?.model || '默认模型' }}</code>
+            <span class="mini-label">{{ t('当前模型') }}</span>
+            <code>{{ state?.model || t('默认模型') }}</code>
           </div>
           <div class="model-grid">
             <button
@@ -2195,32 +2198,31 @@ onUnmounted(() => {
               :disabled="modelBusy"
               @click="applyModel(preset.value)"
             >
-              <span>{{ preset.label }}</span>
-              <small>{{ preset.hint }}</small>
+              <span>{{ t(preset.label) }}</span>
+              <small>{{ t(preset.hint) }}</small>
             </button>
           </div>
           <label class="popover-field">
-            <span class="mini-label">自定义模型 ID</span>
+            <span class="mini-label">{{ t('自定义模型 ID') }}</span>
             <input
               v-model="settingsModel"
               class="text-input"
-              placeholder="留空使用默认模型"
+              :placeholder="t('留空使用默认模型')"
               spellcheck="false"
               @keydown.enter.prevent="saveModel"
             />
           </label>
           <button class="btn secondary block" :disabled="modelBusy" @click="saveModel">
             <span v-if="modelBusy" class="spinner tiny" />
-            应用模型
+            {{ t('应用模型') }}
           </button>
           <p class="popover-note">
-            模型别名由 Claude Code CLI 解释；可用 sonnet / opus / haiku / fable / best /
-            1M 变体 / opusplan，或填写完整模型 ID。
+            {{ t('模型别名由 Claude Code CLI 解释；可用 sonnet / opus / haiku / fable / best / 1M 变体 / opusplan，或填写完整模型 ID。') }}
           </p>
         </template>
 
         <template v-else-if="settingsTab === 'permission'">
-          <span class="mini-label">权限模式</span>
+          <span class="mini-label">{{ t('权限模式') }}</span>
           <div class="mode-list">
             <button
               v-for="mode in appConfig?.permissionModes ?? []"
@@ -2233,7 +2235,7 @@ onUnmounted(() => {
               :disabled="modeBusy"
               @click="chooseMode(mode.value)"
             >
-              <span>{{ mode.label }}</span>
+              <span>{{ t(mode.label) }}</span>
               <Icon v-if="state?.permissionMode === mode.value" name="check" :size="14" />
             </button>
           </div>
@@ -2241,10 +2243,10 @@ onUnmounted(() => {
 
         <template v-else-if="settingsTab === 'extensions'">
           <div class="ext-title">
-            <span class="mini-label">MCP 服务器</span>
+            <span class="mini-label">{{ t('MCP 服务器') }}</span>
             <button class="mini-link" :disabled="extensionsLoading" @click="refreshExtensions">
               <span v-if="extensionsLoading" class="spinner tiny" />
-              {{ extensionsLoading ? '读取中…' : '刷新' }}
+              {{ extensionsLoading ? t('读取中…') : t('刷新') }}
             </button>
           </div>
           <p v-if="extensionsError" class="ext-error">{{ extensionsError }}</p>
@@ -2269,7 +2271,7 @@ onUnmounted(() => {
                   <span v-if="server.tools.length > 4">等 {{ server.tools.length }} 个</span>
                 </div>
                 <div v-if="server.status === 'needs-auth'" class="mcp-warn">
-                  需要认证：请在终端运行 /mcp 完成登录
+                  {{ t('需要认证：请在终端运行 /mcp 完成登录') }}
                 </div>
                 <div v-if="server.error" class="mcp-error" :title="server.error">{{ server.error }}</div>
                 <div class="mcp-actions">
@@ -2287,7 +2289,7 @@ onUnmounted(() => {
                     :disabled="mcpBusy === server.name"
                     @click="toggleMcp(server)"
                   >
-                    {{ server.status === 'disabled' ? '启用' : '停用' }}
+                    {{ server.status === 'disabled' ? t('启用') : t('停用') }}
                   </button>
                 </div>
               </div>
@@ -2297,7 +2299,7 @@ onUnmounted(() => {
             </p>
 
             <div class="popover-sep" />
-            <div class="ext-title"><span class="mini-label">子代理</span></div>
+            <div class="ext-title"><span class="mini-label">{{ t('子代理') }}</span></div>
             <div v-if="extensionsView.agentsError" class="ext-error">{{ extensionsView.agentsError }}</div>
             <div v-if="extensionsView.agents.length" class="agent-list">
               <div v-for="agent in extensionsView.agents" :key="agent.name" class="agent-item">

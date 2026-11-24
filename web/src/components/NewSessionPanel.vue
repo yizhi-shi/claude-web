@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ApiError, api } from '../api';
+import { t, translateServerMessage } from '../i18n';
 import { appConfig, loadConfig, refreshSessions } from '../store';
 import type { DirListing, PermissionMode, ProjectSummary } from '../types';
 import { prettyPath } from '../utils';
@@ -42,7 +43,7 @@ async function browse(target?: string): Promise<void> {
     listing.value = result;
     pathInput.value = result.path;
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : '无法读取目录';
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('无法读取目录');
   } finally {
     loading.value = false;
   }
@@ -71,7 +72,7 @@ async function start(): Promise<void> {
     emit('created', state.id);
     await router.push(`/s/${state.id}`);
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : '创建会话失败';
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('创建会话失败');
   } finally {
     submitting.value = false;
   }
@@ -88,7 +89,7 @@ function submitPath(): void {
 
 async function createFolder(): Promise<void> {
   if (!listing.value || creatingFolder.value) return;
-  const name = window.prompt('新建文件夹名称（将在当前目录下创建）', '新工作区');
+  const name = window.prompt(t('新建文件夹名称（将在当前目录下创建）'), t('新工作区'));
   if (!name || !name.trim()) return;
   creatingFolder.value = true;
   error.value = '';
@@ -96,7 +97,7 @@ async function createFolder(): Promise<void> {
     const result = await api.mkdir(listing.value.path, name.trim());
     await browse(result.path);
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : '创建文件夹失败';
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('创建文件夹失败');
   } finally {
     creatingFolder.value = false;
   }
@@ -119,13 +120,13 @@ onMounted(async () => {
     <div class="panel-heading">
       <div>
         <p class="eyebrow">NEW SESSION</p>
-        <h2>新建会话</h2>
+        <h2>{{ t('新建会话') }}</h2>
       </div>
-      <span class="panel-hint">服务端常驻</span>
+      <span class="panel-hint">{{ t('服务端常驻') }}</span>
     </div>
 
     <div v-if="projects.length" class="recent-projects">
-      <span class="mini-label">最近项目</span>
+      <span class="mini-label">{{ t('最近项目') }}</span>
       <div class="project-chips">
         <button
           v-for="project in projects"
@@ -142,16 +143,16 @@ onMounted(async () => {
 
     <div class="picker">
       <div class="picker-head">
-        <button class="icon-btn" title="上级目录" :disabled="!listing?.parent || loading" @click="goUp">
+        <button class="icon-btn" :title="t('上级目录')" :disabled="!listing?.parent || loading" @click="goUp">
           <Icon name="arrowLeft" :size="17" />
         </button>
         <form class="path-form" @submit.prevent="submitPath">
           <Icon name="folder" :size="15" />
-          <input v-model="pathInput" spellcheck="false" aria-label="工作目录" :disabled="loading" />
+          <input v-model="pathInput" spellcheck="false" :aria-label="t('工作目录')" :disabled="loading" />
         </form>
         <button
           class="icon-btn"
-          title="在当前目录新建文件夹"
+          :title="t('在当前目录新建文件夹')"
           :disabled="!listing || creatingFolder"
           @click="createFolder"
         >
@@ -174,14 +175,14 @@ onMounted(async () => {
           <Icon class="dir-arrow" name="chevronRight" :size="14" />
         </button>
         <div v-if="!loading && (listing?.entries.length ?? 0) === 0" class="dir-empty">
-          这个目录下没有可进入的子目录
+          {{ t('这个目录下没有可进入的子目录') }}
         </div>
-        <div v-if="loading" class="dir-loading">读取目录…</div>
+        <div v-if="loading" class="dir-loading">{{ t('读取目录…') }}</div>
       </div>
     </div>
 
     <div class="field-block">
-      <span class="mini-label">权限模式</span>
+      <span class="mini-label">{{ t('权限模式') }}</span>
       <div class="mode-grid">
         <button
           v-for="mode in modes"
@@ -193,23 +194,23 @@ onMounted(async () => {
           }"
           @click="permissionMode = mode.value"
         >
-          <span class="mode-title">{{ mode.label }}</span>
-          <span class="mode-desc">{{ descriptions[mode.value] }}</span>
+          <span class="mode-title">{{ t(mode.label) }}</span>
+          <span class="mode-desc">{{ t(descriptions[mode.value] ?? '') }}</span>
         </button>
       </div>
     </div>
 
     <p v-if="permissionMode === 'bypassPermissions'" class="mode-warning">
       <Icon name="alert" :size="14" />
-      当前为跳过确认模式：Claude 会直接执行命令和文件修改。仅建议在可信环境使用，可随时在上方切换。
+      {{ t('当前为跳过确认模式：Claude 会直接执行命令和文件修改。仅建议在可信环境使用，可随时在上方切换。') }}
     </p>
 
     <label class="field-block">
-      <span class="mini-label">模型（可选）</span>
+      <span class="mini-label">{{ t('模型（可选）') }}</span>
       <input
         v-model="model"
         class="text-input"
-        :placeholder="currentModel ? `留空使用默认：${currentModel}` : '留空使用默认模型'"
+        :placeholder="currentModel ? t('留空使用默认：{model}', { model: currentModel }) : t('留空使用默认模型')"
         list="model-options"
         spellcheck="false"
       />
@@ -223,10 +224,10 @@ onMounted(async () => {
 
     <button class="btn primary block start-btn" :disabled="!listing || submitting" @click="start">
       <Icon name="play" :size="15" />
-      {{ submitting ? '创建中…' : '开始会话' }}
+      {{ submitting ? t('创建中…') : t('开始会话') }}
     </button>
     <p class="new-session-note">
-      会话进程在服务端运行，页面刷新或断网都不会中断正在执行的任务。
+      {{ t('会话进程在服务端运行，页面刷新或断网都不会中断正在执行的任务。') }}
     </p>
   </section>
 </template>

@@ -5,6 +5,7 @@ import { api } from '../api';
 import AppShell from '../components/AppShell.vue';
 import Icon from '../components/Icon.vue';
 import NewSessionPanel from '../components/NewSessionPanel.vue';
+import { t } from '../i18n';
 import { appConfig, loadConfig, refreshSessions, sessions } from '../store';
 import type { ProjectSummary } from '../types';
 import {
@@ -68,9 +69,9 @@ watch(
       <header class="page-head">
         <div>
           <p class="eyebrow">WORKSPACE</p>
-          <h1>会话空间</h1>
+          <h1>{{ t('会话空间') }}</h1>
           <p class="page-sub">
-            在浏览器里继续本机的 Claude Code。会话运行在服务端，刷新不会中断任务。
+            {{ t('在浏览器里继续本机的 Claude Code。会话运行在服务端，刷新不会中断任务。') }}
           </p>
         </div>
         <div class="head-meta">
@@ -90,21 +91,21 @@ watch(
           <span class="stat-icon live"><Icon name="activity" :size="18" /></span>
           <div>
             <span class="stat-value">{{ runningCount }}</span>
-            <span class="stat-label">正在执行</span>
+            <span class="stat-label">{{ t('正在执行') }}</span>
           </div>
         </div>
         <div class="stat-card">
           <span class="stat-icon"><Icon name="list" :size="18" /></span>
           <div>
             <span class="stat-value">{{ sessions.length }}</span>
-            <span class="stat-label">可用会话</span>
+            <span class="stat-label">{{ t('可用会话') }}</span>
           </div>
         </div>
         <div class="stat-card">
           <span class="stat-icon"><Icon name="folder" :size="18" /></span>
           <div>
             <span class="stat-value">{{ projectCount }}</span>
-            <span class="stat-label">最近项目</span>
+            <span class="stat-label">{{ t('最近项目') }}</span>
           </div>
         </div>
       </div>
@@ -114,11 +115,11 @@ watch(
           <div class="panel-heading">
             <div>
               <p class="eyebrow">SESSIONS</p>
-              <h2>最近的会话</h2>
+              <h2>{{ t('最近的会话') }}</h2>
             </div>
             <div class="search-box">
               <Icon name="search" :size="15" />
-              <input v-model="search" placeholder="搜索标题或目录…" spellcheck="false" />
+              <input v-model="search" :placeholder="t('搜索标题或目录…')" spellcheck="false" />
             </div>
           </div>
 
@@ -132,12 +133,12 @@ watch(
               <span class="status-dot" :class="statusTone(item.status)" />
               <span class="session-main">
                 <span class="session-title-row">
-                  <span class="session-name">{{ item.title }}</span>
+                  <span class="session-name">{{ item.title === '新会话' ? t('新会话') : item.title }}</span>
                   <span
                     v-if="item.status === 'running' || item.status === 'waiting_permission'"
                     class="live-badge"
-                  >运行中</span>
-                  <span v-else-if="item.source === 'claude'" class="source-badge">终端</span>
+                  >{{ t('运行中') }}</span>
+                  <span v-else-if="item.source === 'claude'" class="source-badge">{{ t('终端') }}</span>
                 </span>
                 <span class="session-meta">
                   <span>{{ prettyPath(item.cwd) }}</span>
@@ -153,8 +154,8 @@ watch(
 
             <div v-if="filtered.length === 0" class="empty-state">
               <span class="empty-mark"><Icon name="terminal" :size="26" /></span>
-              <h3>{{ search ? '没有匹配的会话' : '还没有会话' }}</h3>
-              <p>{{ search ? '换个关键词试试。' : '在右侧选择项目目录，开始第一个会话。' }}</p>
+              <h3>{{ search ? t('没有匹配的会话') : t('还没有会话') }}</h3>
+              <p>{{ search ? t('换个关键词试试。') : t('在右侧选择项目目录，开始第一个会话。') }}</p>
             </div>
           </div>
         </section>

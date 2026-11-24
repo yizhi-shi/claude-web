@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0 — 2026-11-24
+
+- Added built-in Chinese/English UI switching. A lightweight `web/src/i18n.ts` dictionary plus reactive `t()` covers navigation, login/setup, home, chat controls, approval/question/plan panels, tool cards, voice settings and session settings.
+- Language follows browser preference on first visit, persists per browser in `localStorage` (`cw.locale`), and updates `document.documentElement.lang`. Switch from the sidebar bottom, the login card, or Settings → Appearance.
+- English mode translates UI chrome and common server errors; Claude/CLI output and unknown server messages remain in their original language.
+- Verified with Playwright at 1280×900 and 390×844: login/setup switch, English home/chat/settings, no residual UI Chinese except the target-language toggle label; Chinese mode restored on toggle; persistence after reload.
+
 ## 0.9.0 — 2026-11-24
 
 - Added a native “Extensions” tab for the current session: MCP server status, scope/source, server info, tools, errors, reconnect, and session-scoped enable/disable; subagents are shown read-only with their descriptions and models.

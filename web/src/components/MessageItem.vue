@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { attachmentUrl } from '../api';
+import { t } from '../i18n';
 import type { AssistantItem, ChatItem } from '../chatModel';
 import { formatClock, formatCost, formatDuration, renderMarkdown } from '../utils';
 import Icon from './Icon.vue';
@@ -108,11 +109,11 @@ async function copyText(): Promise<void> {
       <div v-if="item.text" class="user-bubble-text">{{ item.text }}</div>
       <div v-if="item.queued" class="user-msg-state queued">
         <Icon name="clock" :size="12" />
-        <span>排队中，等待当前步骤结束</span>
+        <span>{{ t('排队中，等待当前步骤结束') }}</span>
       </div>
       <div v-else-if="item.failed" class="user-msg-state failed">
         <Icon name="alert" :size="12" />
-        <span>未送达{{ item.failureReason ? `：${item.failureReason}` : '' }}</span>
+        <span>{{ t('未送达') }}{{ item.failureReason ? `: ${item.failureReason}` : '' }}</span>
       </div>
     </div>
     <span class="msg-time">{{ formatClock(item.ts) }}</span>
@@ -123,14 +124,14 @@ async function copyText(): Promise<void> {
       <span class="assistant-avatar" :class="{ system: synthetic }">
         <Icon :name="synthetic ? 'info' : 'brand'" :size="20" />
       </span>
-      <span class="assistant-name">{{ synthetic ? '系统' : 'Claude' }}</span>
+      <span class="assistant-name">{{ synthetic ? t('系统') : 'Claude' }}</span>
       <span v-if="item.model && !synthetic" class="assistant-model">{{ item.model }}</span>
       <span class="assistant-spacer" />
       <span class="msg-time">{{ formatClock(item.ts) }}</span>
       <button
         v-if="assistantText"
         class="icon-btn tiny copy-msg"
-        :title="copied ? '已复制' : '复制回复'"
+        :title="copied ? t('已复制') : t('复制回复')"
         @click="copyText"
       >
         <Icon :name="copied ? 'check' : 'copy'" :size="13" />
@@ -140,7 +141,7 @@ async function copyText(): Promise<void> {
     <div class="assistant-body">
       <template v-if="!item.final">
         <details v-if="item.streamingThinking" class="thinking-block" open>
-          <summary><Icon name="spark" :size="14" />思考过程</summary>
+          <summary><Icon name="spark" :size="14" />{{ t('思考过程') }}</summary>
           <pre ref="thinkingEl" @scroll="onThinkingScroll">{{ item.streamingThinking }}</pre>
         </details>
         <div
@@ -164,14 +165,14 @@ async function copyText(): Promise<void> {
           class="typing-row"
         >
           <span class="spinner" />
-          <span>正在思考…</span>
+          <span>{{ t('正在思考…') }}</span>
         </div>
       </template>
 
       <template v-else>
         <template v-for="(block, index) in displayedBlocks" :key="index">
           <details v-if="block.type === 'thinking'" class="thinking-block">
-            <summary><Icon name="spark" :size="14" />思考过程</summary>
+            <summary><Icon name="spark" :size="14" />{{ t('思考过程') }}</summary>
             <pre>{{ block.thinking }}</pre>
           </details>
           <div
@@ -198,7 +199,7 @@ async function copyText(): Promise<void> {
 
   <div v-else class="turn-line" :class="{ error: item.isError }">
     <Icon :name="item.isError ? 'alert' : 'check'" :size="13" />
-    <span>{{ item.isError ? '回合结束（错误）' : '完成' }}</span>
+    <span>{{ item.isError ? t('回合结束（错误）') : t('完成') }}</span>
     <span v-if="formatDuration(item.durationMs)">{{ formatDuration(item.durationMs) }}</span>
     <span v-if="formatCost(item.costUsd)">{{ formatCost(item.costUsd) }}</span>
   </div>

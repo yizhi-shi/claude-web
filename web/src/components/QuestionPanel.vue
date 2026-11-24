@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
+import { t } from '../i18n';
 import type { PendingQuestionView, QuestionItem } from '../types';
 import Icon from './Icon.vue';
 
@@ -74,19 +75,19 @@ function submit(): void {
       <span class="permission-icon question-icon"><Icon name="info" :size="18" /></span>
       <div class="permission-copy">
         <div class="permission-title">
-          需要你的选择
+          {{ t('需要你的选择') }}
           <span class="permission-tool">AskUserQuestion</span>
         </div>
-        <p class="permission-desc">Claude 暂停在这里等待回答；也可以跳过，让它按最佳判断继续。</p>
+        <p class="permission-desc">{{ t('Claude 暂停在这里等待回答；也可以跳过，让它按最佳判断继续。') }}</p>
       </div>
-      <span class="permission-wait">任务已暂停</span>
+      <span class="permission-wait">{{ t('任务已暂停') }}</span>
     </div>
 
     <div class="question-list">
       <div v-for="item in question.questions" :key="item.question" class="question-block">
         <div class="question-head">
           <span class="question-chip">{{ item.header }}</span>
-          <span v-if="item.multiSelect" class="question-multi">可多选</span>
+          <span v-if="item.multiSelect" class="question-multi">{{ t('可多选') }}</span>
         </div>
         <p class="question-text">{{ item.question }}</p>
         <div class="question-options" role="group" :aria-label="item.question">
@@ -111,11 +112,11 @@ function submit(): void {
           </button>
         </div>
         <label class="question-other">
-          <span>其他答案（可选）</span>
+          <span>{{ t('其他答案（可选）') }}</span>
           <input
             :value="custom[item.question]"
             type="text"
-            placeholder="直接输入你的选择…"
+            :placeholder="t('直接输入你的选择…')"
             :disabled="busy"
             @input="setCustom(item, ($event.target as HTMLInputElement).value)"
           />
@@ -125,12 +126,12 @@ function submit(): void {
 
     <div class="permission-foot">
       <p class="permission-note">
-        回答会作为工具结果交给 Claude。超时 {{ timeoutMinutes ?? 30 }} 分钟将自动跳过。
+        {{ t('回答会作为工具结果交给 Claude。超时 {n} 分钟将自动跳过。', { n: timeoutMinutes ?? 30 }) }}
       </p>
       <div class="permission-actions">
-        <button class="btn ghost" :disabled="busy" @click="emit('skip')">跳过</button>
+        <button class="btn ghost" :disabled="busy" @click="emit('skip')">{{ t('跳过') }}</button>
         <button class="btn primary" :disabled="busy || !complete" @click="submit">
-          {{ busy ? '提交中…' : '提交回答' }}
+          {{ busy ? t('提交中…') : t('提交回答') }}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { ApiError, api } from '../api';
+import { t, translateServerMessage } from '../i18n';
 import { toast } from '../store';
 import type { VoiceConfigView, VoiceProviderId } from '../types';
 import Icon from './Icon.vue';
@@ -131,7 +132,7 @@ async function load(): Promise<void> {
     fill('volcengine', view);
     fill('browser', view);
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '读取语音配置失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('读取语音配置失败'), 'error');
   }
 }
 
@@ -170,11 +171,11 @@ async function save(id: VoiceProviderId): Promise<void> {
     config.value = view;
     active.value = view.active;
     fill(id, view);
-    toast('语音渠道已保存并设为当前', 'success');
+    toast(t('语音渠道已保存并设为当前'), 'success');
     delete results[id];
     delete liveResults[id];
   } catch (err) {
-    toast(err instanceof ApiError ? err.message : '保存失败', 'error');
+    toast(err instanceof ApiError ? translateServerMessage(err.message) : t('保存失败'), 'error');
   } finally {
     saving.value = null;
   }
@@ -190,7 +191,7 @@ async function testLive(id: VoiceProviderId): Promise<void> {
   } catch (err) {
     liveResults[id] = {
       ok: false,
-      detail: err instanceof ApiError ? err.message : '实时连接测试失败',
+      detail: err instanceof ApiError ? translateServerMessage(err.message) : t('实时连接测试失败'),
     };
   } finally {
     liveTesting.value = null;
@@ -206,7 +207,7 @@ async function test(id: VoiceProviderId): Promise<void> {
   } catch (err) {
     results[id] = {
       ok: false,
-      detail: err instanceof ApiError ? err.message : '测试失败',
+      detail: err instanceof ApiError ? translateServerMessage(err.message) : t('测试失败'),
     };
   } finally {
     testing.value = null;
@@ -221,18 +222,16 @@ onMounted(load);
     <div class="panel-heading">
       <div>
         <p class="eyebrow">VOICE INPUT</p>
-        <h2>语音识别</h2>
+        <h2>{{ t('语音识别') }}</h2>
       </div>
-      <span class="panel-hint">可插拔渠道</span>
+      <span class="panel-hint">{{ t('可插拔渠道') }}</span>
     </div>
 
     <p class="section-lead">
-      在这里配置一次渠道即可；聊天输入框的麦克风会直接开始/结束听写，不再弹出配置面板。
-      Gemini 可以在支持的地区直连，也可以通过 HTTPS 中转访问；OpenAI
-      兼容渠道适合 Whisper 类服务；浏览器内置识别不经过服务端。
+      {{ t('在这里配置一次渠道即可；聊天输入框的麦克风会直接开始/结束听写，不再弹出配置面板。Gemini 可以在支持的地区直连，也可以通过 HTTPS 中转访问；OpenAI 兼容渠道适合 Whisper 类服务；浏览器内置识别不经过服务端。') }}
     </p>
 
-    <div v-if="!config" class="settings-loading"><span class="spinner" />读取配置…</div>
+    <div v-if="!config" class="settings-loading"><span class="spinner" />{{ t('读取配置…') }}</div>
 
     <template v-else>
       <div class="provider-grid">
@@ -244,68 +243,68 @@ onMounted(load);
         >
           <header class="provider-head">
             <div>
-              <h3>{{ config.builtin[id]?.label ?? id }}</h3>
-              <span v-if="active === id" class="current-badge">当前使用</span>
+              <h3>{{ t(config.builtin[id]?.label ?? id) }}</h3>
+              <span v-if="active === id" class="current-badge">{{ t('当前使用') }}</span>
             </div>
             <label class="switch-row">
               <input v-model="forms[id].enabled" type="checkbox" />
-              <span>启用</span>
+              <span>{{ t('启用') }}</span>
             </label>
           </header>
 
           <p class="provider-docs">
             <a :href="config.builtin[id]?.docs" target="_blank" rel="noopener noreferrer">
-              文档
+              {{ t('文档') }}
               <Icon name="external" :size="12" />
             </a>
           </p>
 
           <template v-if="id !== 'browser'">
             <div v-if="id === 'openai'" class="preset-row">
-              <span class="mini-label">快速预设</span>
+              <span class="mini-label">{{ t('快速预设') }}</span>
               <button
                 v-for="preset in openaiPresets"
                 :key="preset.label"
                 class="preset-chip"
                 @click="applyPreset(preset)"
               >
-                {{ preset.label }}
+                {{ t(preset.label) }}
               </button>
             </div>
 
             <label class="field">
-              <span>API Key {{ config.providers[id].hasApiKey ? `（已保存 ${config.providers[id].apiKeyHint}）` : '' }}</span>
+              <span>API Key {{ config.providers[id].hasApiKey ? `(${t('已保存')} ${config.providers[id].apiKeyHint})` : '' }}</span>
               <input
                 v-model="forms[id].apiKey"
                 type="password"
-                :placeholder="config.providers[id].hasApiKey ? '留空表示不修改' : '输入 API Key'"
+                :placeholder="config.providers[id].hasApiKey ? t('留空表示不修改') : t('输入 API Key')"
                 autocomplete="off"
               />
             </label>
             <label v-if="config.providers[id].hasApiKey" class="clear-row">
               <input v-model="forms[id].clearApiKey" type="checkbox" />
-              清除已保存的 API Key
+              {{ t('清除已保存的 API Key') }}
             </label>
 
             <template v-if="id === 'volcengine'">
               <div class="grid-2">
                 <label class="field">
                   <span>App ID</span>
-                  <input v-model="forms[id].appId" placeholder="火山引擎 App ID" spellcheck="false" />
+                  <input v-model="forms[id].appId" :placeholder="t('火山引擎 App ID')" spellcheck="false" />
                 </label>
                 <label class="field">
-                  <span>Access Key {{ config.providers[id].hasAccessKey ? `（已保存 ${config.providers[id].accessKeyHint}）` : '' }}</span>
+                  <span>Access Key {{ config.providers[id].hasAccessKey ? `(${t('已保存')} ${config.providers[id].accessKeyHint})` : '' }}</span>
                   <input
                     v-model="forms[id].accessKey"
                     type="password"
-                    :placeholder="config.providers[id].hasAccessKey ? '留空表示不修改' : 'Access Token'"
+                    :placeholder="config.providers[id].hasAccessKey ? t('留空表示不修改') : 'Access Token'"
                     autocomplete="off"
                   />
                 </label>
               </div>
               <label v-if="config.providers[id].hasAccessKey" class="clear-row">
                 <input v-model="forms[id].clearAccessKey" type="checkbox" />
-                清除已保存的 Access Key
+                {{ t('清除已保存的 Access Key') }}
               </label>
               <label class="field">
                 <span>Resource ID</span>
@@ -316,34 +315,33 @@ onMounted(load);
                 />
               </label>
               <p class="provider-inline-note">
-                整段转写时服务端用 ffmpeg 把浏览器录音转成 16kHz PCM；开启实时流式后直接走
-                WebSocket，不需要 ffmpeg。
+                {{ t('整段转写时服务端用 ffmpeg 把浏览器录音转成 16kHz PCM；开启实时流式后直接走 WebSocket，不需要 ffmpeg。') }}
               </p>
             </template>
 
             <div class="grid-2">
               <label class="field">
-                <span>模型</span>
+                <span>{{ t('模型') }}</span>
                 <input v-model="forms[id].model" list="voice-models" spellcheck="false" />
               </label>
               <label class="field">
-                <span>语言</span>
+                <span>{{ t('语言') }}</span>
                 <input v-model="forms[id].language" placeholder="zh-CN / zh / en" spellcheck="false" />
               </label>
             </div>
             <label class="field">
-              <span>API 地址</span>
+              <span>{{ t('API 地址') }}</span>
               <input v-model="forms[id].baseUrl" spellcheck="false" />
             </label>
 
             <template v-if="id === 'gemini'">
               <label class="switch-row relay-toggle">
                 <input v-model="forms[id].relayEnabled" type="checkbox" />
-                <span>通过 HTTPS 中转访问（自建反代或网关）</span>
+                <span>{{ t('通过 HTTPS 中转访问（自建反代或网关）') }}</span>
               </label>
               <template v-if="forms[id].relayEnabled">
                 <label class="field">
-                  <span>中转根地址</span>
+                  <span>{{ t('中转根地址') }}</span>
                   <input
                     v-model="forms[id].relayBaseUrl"
                     placeholder="https://relay.example.com/google-ai-studio"
@@ -351,15 +349,15 @@ onMounted(load);
                   />
                 </label>
                 <label class="field">
-                  <span>中转鉴权头名称</span>
+                  <span>{{ t('中转鉴权头名称') }}</span>
                   <input
                     v-model="forms[id].relayAuthHeader"
-                    placeholder="Authorization（默认）"
+                    :placeholder="t('Authorization（默认）')"
                     spellcheck="false"
                   />
                 </label>
                 <label class="field">
-                  <span>中转鉴权值 {{ config.providers[id].hasRelayAuth ? `（已保存 ${config.providers[id].relayAuthHint}）` : '' }}</span>
+                  <span>{{ t('中转鉴权值') }} {{ config.providers[id].hasRelayAuth ? `（已保存 ${config.providers[id].relayAuthHint}）` : '' }}</span>
                   <input
                     v-model="forms[id].relayAuth"
                     type="password"
@@ -369,7 +367,7 @@ onMounted(load);
                 </label>
                 <label v-if="config.providers[id].hasRelayAuth" class="clear-row">
                   <input v-model="forms[id].clearRelayAuth" type="checkbox" />
-                  清除已保存的中转鉴权
+                  {{ t('清除已保存的中转鉴权') }}
                 </label>
               </template>
             </template>
@@ -377,35 +375,26 @@ onMounted(load);
             <div class="live-block">
                 <label class="switch-row">
                   <input v-model="forms[id].liveEnabled" type="checkbox" />
-                  <span>实时流式识别（边说边写）</span>
+                  <span>{{ t('实时流式识别（边说边写）') }}</span>
                 </label>
                 <p class="provider-inline-note">
-                  <template v-if="id === 'gemini'">
-                    聊天框麦克风会边说边把文字写进输入框。Gemini Live 需要支持地区的
-                    WebSocket 中转；普通 HTTP 网关通常不支持 Live WS。
-                  </template>
-                  <template v-else-if="id === 'openai'">
-                    OpenAI 官方走 Realtime WebSocket；其它 OpenAI 兼容服务默认使用分段实时
-                    （静音断句后立即转写），两者都无需额外配置 ffmpeg。
-                  </template>
-                  <template v-else>
-                    直接复用上面的 App ID / Access Key / Resource ID，通过火山引擎流式
-                    WebSocket 边说边写，16kHz PCM 不再经过 ffmpeg。
-                  </template>
+{{ t('聊天框麦克风会边说边把文字写进输入框。Gemini Live 需要支持地区的 WebSocket 中转；普通 HTTP 网关通常不支持 Live WS。') }}
+{{ t('OpenAI 官方走 Realtime WebSocket；其它 OpenAI 兼容服务默认使用分段实时（静音断句后立即转写），两者都无需额外配置 ffmpeg。') }}
+{{ t('直接复用上面的 App ID / Access Key / Resource ID，通过火山引擎流式 WebSocket 边说边写，16kHz PCM 不再经过 ffmpeg。') }}
                 </p>
                 <template v-if="forms[id].liveEnabled">
                   <template v-if="id === 'openai'">
                     <div class="grid-2">
                       <label class="field">
-                        <span>实时模式</span>
+                        <span>{{ t('实时模式') }}</span>
                         <select v-model="forms[id].liveMode" class="text-input">
-                          <option value="auto">自动（官方 Realtime / 其它分段）</option>
+                          <option value="auto">{{ t('自动（官方 Realtime / 其它分段）') }}</option>
                           <option value="realtime">Realtime WebSocket</option>
-                          <option value="segment">分段 HTTP 转写</option>
+                          <option value="segment">{{ t('分段 HTTP 转写') }}</option>
                         </select>
                       </label>
                       <label class="field">
-                        <span>实时模型</span>
+                        <span>{{ t('实时模型') }}</span>
                         <input
                           v-model="forms[id].liveModel"
                           list="voice-models"
@@ -425,7 +414,7 @@ onMounted(load);
                   </template>
                   <div v-else class="grid-2">
                     <label class="field">
-                      <span>实时模型</span>
+                      <span>{{ t('实时模型') }}</span>
                       <input
                         v-model="forms[id].liveModel"
                         :placeholder="id === 'gemini' ? 'gemini-3.5-transcribe-live' : 'bigmodel'"
@@ -433,7 +422,7 @@ onMounted(load);
                       />
                     </label>
                     <label class="field">
-                      <span>实时地址</span>
+                      <span>{{ t('实时地址') }}</span>
                       <input
                         v-model="forms[id].liveUrl"
                         :placeholder="id === 'gemini' ? 'wss://host/ws/…BidiGenerateContent' : 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel'"
@@ -443,17 +432,17 @@ onMounted(load);
                   </div>
                   <template v-if="id === 'gemini'">
                     <label class="field">
-                      <span>中转 Token {{ config.providers[id].hasLiveProxyToken ? `（已保存 ${config.providers[id].liveProxyTokenHint}）` : '' }}</span>
+                      <span>{{ t('中转 Token') }} {{ config.providers[id].hasLiveProxyToken ? `（已保存 ${config.providers[id].liveProxyTokenHint}）` : '' }}</span>
                       <input
                         v-model="forms[id].liveProxyToken"
                         type="password"
-                        :placeholder="config.providers[id].hasLiveProxyToken ? '留空表示不修改' : '内部中转 Token（可选）'"
+                        :placeholder="config.providers[id].hasLiveProxyToken ? t('留空表示不修改') : t('内部中转 Token（可选）')"
                         autocomplete="off"
                       />
                     </label>
                     <label v-if="config.providers[id].hasLiveProxyToken" class="clear-row">
                       <input v-model="forms[id].clearLiveProxyToken" type="checkbox" />
-                      清除已保存的中转 Token
+                      {{ t('清除已保存的中转 Token') }}
                     </label>
                   </template>
                   <div class="live-test-row">
@@ -463,9 +452,9 @@ onMounted(load);
                       @click="testLive(id)"
                     >
                       <span v-if="liveTesting === id" class="spinner tiny" />
-                      测试实时连接
+                      {{ t('测试实时连接') }}
                     </button>
-                    <span class="provider-inline-note">测试使用已保存配置，请先保存。</span>
+                    <span class="provider-inline-note">{{ t('测试使用已保存配置，请先保存。') }}</span>
                   </div>
                   <p
                     v-if="liveResults[id]"
@@ -477,10 +466,10 @@ onMounted(load);
                     <span v-if="liveResults[id].latencyMs !== undefined">（{{ liveResults[id].latencyMs }}ms）</span>
                   </p>
                   <p v-if="!config.providers[id].liveAvailable" class="provider-inline-note">
-                    {{ config.providers[id].liveDetail }}；保存后生效。
+                    {{ config.providers[id].liveDetail }}{{ t('；保存后生效。') }}
                   </p>
                   <p v-else class="provider-inline-note">
-                    {{ config.providers[id].liveDetail }}。
+                    {{ config.providers[id].liveDetail }}{{ t('。') }}
                   </p>
                 </template>
               </div>
@@ -490,18 +479,15 @@ onMounted(load);
             </datalist>
           </template>
 
-          <p v-else class="browser-note">
-            使用浏览器自带的 SpeechRecognition，不需要 API Key。兼容性取决于浏览器，桌面 Chrome
-            支持较好，移动端表现不一。
-          </p>
+<p v-else class="browser-note">{{ t('使用浏览器自带的 SpeechRecognition，不需要 API Key。兼容性取决于浏览器，桌面 Chrome 支持较好，移动端表现不一。') }}</p>
 
           <div class="provider-actions">
             <button class="btn secondary small" :disabled="testing !== null" @click="test(id)">
               <span v-if="testing === id" class="spinner tiny" />
-              测试连接
+              {{ t('测试连接') }}
             </button>
             <button class="btn primary small" :disabled="saving !== null" @click="save(id)">
-              {{ saving === id ? '保存中…' : '保存并设为当前' }}
+              {{ saving === id ? t('保存中…') : t('保存并设为当前') }}
             </button>
           </div>
           <p
@@ -516,9 +502,7 @@ onMounted(load);
         </article>
       </div>
 
-      <p class="section-note">
-        Key 只保存在本机 <code>data/voice.json</code>（0600），不会进入 Git 仓库；页面不会回显完整 Key。
-      </p>
+<p class="section-note">{{ t('Key 只保存在本机') }} <code>data/voice.json</code>{{ t('（0600），不会进入 Git 仓库；页面不会回显完整 Key。') }}</p>
     </template>
   </section>
 </template>

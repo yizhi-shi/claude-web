@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import { t } from '../i18n';
 import type { PendingPermissionView } from '../types';
 import { presentTool } from '../utils';
 import Icon from './Icon.vue';
@@ -20,7 +21,10 @@ const denyRef = ref<HTMLButtonElement | null>(null);
 
 const command = computed(() => presentation.value.command ?? '');
 const detailTitle = computed(
-  () => props.permission.title || props.permission.description || `${props.permission.toolName} 请求执行`,
+  () =>
+    props.permission.title ||
+    props.permission.description ||
+    t('{tool} 请求执行', { tool: props.permission.toolName }),
 );
 const canAlwaysAllow = computed(() => !props.permission.suppressAlwaysAllowRule);
 
@@ -38,12 +42,12 @@ onMounted(async () => {
       <span class="permission-icon"><Icon name="shield" :size="18" /></span>
       <div class="permission-copy">
         <div class="permission-title">
-          需要你的批准
+          {{ t('需要你的批准') }}
           <span class="permission-tool">{{ permission.toolName }}</span>
         </div>
         <p class="permission-desc">{{ detailTitle }}</p>
       </div>
-      <span class="permission-wait">任务已暂停</span>
+      <span class="permission-wait">{{ t('任务已暂停') }}</span>
     </div>
 
     <div v-if="command" class="permission-command">
@@ -62,14 +66,14 @@ onMounted(async () => {
 
     <div class="permission-foot">
       <p class="permission-note">
-        仅批准你确认过的操作。超时 {{ timeoutMinutes ?? 30 }} 分钟将自动拒绝。
+        {{ t('仅批准你确认过的操作。超时 {n} 分钟将自动拒绝。', { n: timeoutMinutes ?? 30 }) }}
       </p>
       <div class="permission-actions">
         <button ref="denyRef" class="btn ghost danger-text" :disabled="busy" @click="emit('respond', 'deny')">
-          拒绝
+          {{ t('拒绝') }}
         </button>
         <button class="btn secondary" :disabled="busy" @click="emit('respond', 'allow_once')">
-          允许一次
+          {{ t('允许一次') }}
         </button>
         <button
           v-if="canAlwaysAllow"
@@ -77,7 +81,7 @@ onMounted(async () => {
           :disabled="busy"
           @click="emit('respond', 'allow_session')"
         >
-          本次会话允许
+          {{ t('本次会话允许') }}
         </button>
       </div>
     </div>

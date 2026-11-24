@@ -46,6 +46,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 旁问（/btw） | 任务运行中想快速问一句，又不想打断 | 顶部「旁问」打开浮动面板（桌面右下 / 手机底部卡片）；拖动顶部把手可上下调整高度并记忆，双击还原。服务端从最近可渲染事件生成紧凑上下文，建临时、禁工具、不落盘、不 resume 的查询，基于当前上下文流式回答；答案不进入主对话，可取消，费用单独显示 |
 | 语音输入 | 手机/免手操作时快速输入 | 麦克风按钮直接开始/结束听写；默认整段 WebM 上传转写，也可开启实时流式边说边写。渠道在「设置 → 语音识别」配置一次。支持 Gemini 3.5 Transcribe / Live、OpenAI 兼容（官方 Realtime 或分段实时；OpenAI/Groq/SiliconFlow/本地 faster-whisper）、字节火山引擎流式 WebSocket、浏览器内置 |
 | 多端布局 / 亮暗主题 | 手机和电脑都要好用 | Vue 3 + CSS 变量 + `100dvh` + 移动端抽屉侧栏/底部输入区；亮暗两套 token；服务端默认外观（跟随系统/亮/暗）作用于登录页与新浏览器 |
+| 中英文界面 | 中文/英文用户都能直接使用 | `web/src/i18n.ts` 内置中文/English 字典；首次跟随浏览器语言，按浏览器持久化；登录页、侧栏底部、设置 → 外观均可切换；日期/状态/错误等统一走 `t()` |
 | 干净安装 | 一台 Linux 设备快速上线 | `install.sh` 默认用户级安装到 `~/.local/share/claude-web`，构建后注册 `systemd --user` 并 `enable-linger`；也支持 `--system` 安装到 `/opt` |
 | 跟随 VSCode 插件 | 插件升级后不漏功能 | `docs/FEATURE-PARITY.md` 维护能力矩阵；`scripts/check-upstream.mjs` 输出本机 CLI / SDK / 插件版本，按清单复核 CLI 与 SDK 类型 |
 
@@ -294,6 +295,7 @@ curl -fsS http://127.0.0.1:8010/api/health
 - [Roadmap](docs/ROADMAP.md)
 - [VSCode 插件能力对照](docs/FEATURE-PARITY.md)
 - [语音渠道调研与配置](docs/VOICE-ASR.md)
+- [中英文界面（i18n）](docs/I18N.md)
 - [附件链路：Web 上传到 Claude Code](docs/ATTACHMENTS.md)
 - [MCP / 子代理 / 插件：Web 管理范围](docs/EXTENSIONS.md)
 - [同类项目调研与取舍](docs/COMPETITIVE-RESEARCH.md)

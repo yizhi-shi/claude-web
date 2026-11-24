@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { t } from '../i18n';
 import type { PendingPlanView } from '../types';
 import { renderMarkdown } from '../utils';
 import Icon from './Icon.vue';
@@ -36,33 +37,33 @@ function decide(approved: boolean): void {
       <span class="permission-icon plan-icon"><Icon name="list" :size="18" /></span>
       <div class="permission-copy">
         <div class="permission-title">
-          计划待确认
+          {{ t('计划待确认') }}
           <span class="permission-tool">ExitPlanMode</span>
         </div>
-        <p class="permission-desc">Claude 已完成规划，批准后才会离开计划模式并开始执行。</p>
+        <p class="permission-desc">{{ t('Claude 已完成规划，批准后才会离开计划模式并开始执行。') }}</p>
       </div>
-      <span class="permission-wait">任务已暂停</span>
+      <span class="permission-wait">{{ t('任务已暂停') }}</span>
     </div>
 
     <div class="plan-body markdown" v-html="rendered" />
 
     <label class="field plan-feedback">
-      <span>修改意见（拒绝时带给 Claude）</span>
+      <span>{{ t('修改意见（拒绝时带给 Claude）') }}</span>
       <input
         v-model="feedback"
-        placeholder="例如：先补测试，再执行…"
+        :placeholder="t('例如：先补测试，再执行…')"
         :disabled="busy"
       />
     </label>
 
     <div class="permission-foot">
       <p class="permission-note">
-        批准会开始执行；拒绝会保留计划模式。超时 {{ timeoutMinutes ?? 30 }} 分钟按拒绝处理。
+        {{ t('批准会开始执行；拒绝会保留计划模式。超时 {n} 分钟按拒绝处理。', { n: timeoutMinutes ?? 30 }) }}
       </p>
       <div class="permission-actions">
-        <button class="btn secondary" :disabled="busy" @click="decide(false)">继续完善计划</button>
+        <button class="btn secondary" :disabled="busy" @click="decide(false)">{{ t('继续完善计划') }}</button>
         <button class="btn primary" :disabled="busy" @click="decide(true)">
-          {{ busy ? '处理中…' : '批准并开始执行' }}
+          {{ busy ? t('处理中…') : t('批准并开始执行') }}
         </button>
       </div>
     </div>
