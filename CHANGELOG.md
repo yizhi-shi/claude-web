@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0 — 2026-11-25
+
+- Reworked the Settings page into a task-grouped named grid: account and appearance share the first row, sign-in security spans the full width with email and SMTP columns, workspace and runtime pair up, voice spans the full width, and security notes close the page.
+- Split email verification and SMTP out of the oversized account card. SMTP is collapsed to a host/port/security/source summary by default, expands on demand, and keeps the local `disable-2fa` recovery note beside it.
+- Voice providers are now a tab bar with one active provider panel; switching tabs preserves each provider's form state and dramatically shortens the page.
+- Responsive settings switch to one column at 1180px; the security columns stack, voice tabs scroll horizontally, and 1280/1024/390 widths have no horizontal overflow.
+- Playwright layout smoke covers light/dark modes, SMTP expand, voice tab switching, equal-height paired cards and screenshots; desktop grid height dropped from 3884 to 2402px, mobile from 6200 to 4093px, voice panel from 1452 to 726px.
+
 ## 0.11.1 — 2026-11-25
 
 - Email SMTP server settings are now editable in Settings → Administrator account → Email sign-in verification: host, port, SSL/STARTTLS, username, password, From address/name. The password is write-only, stored in `data/mail.json` (0600), and never returned by the API.

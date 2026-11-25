@@ -204,6 +204,26 @@ const EN: Record<string, string> = {
   '来自服务端环境配置': 'from server environment',
   '来自本机设置': 'from local settings',
   '未配置': 'not configured',
+  '登录安全': 'Sign-in security',
+  '邮箱验证已开启': 'Email verification is on',
+  '仅密码登录': 'Password only',
+  '账号安全': 'Account security',
+  '密码修改后，其他设备会退出登录；邮箱验证码在下方「登录安全」中配置。':
+    'Changing the password signs out other devices. Email codes are configured under Sign-in security below.',
+  '无法收邮件时': 'If email is unavailable',
+  'SMTP 故障或邮箱不可用时，在服务器执行 npm run disable-2fa，再重启服务；该操作只允许本地 shell。':
+    'If SMTP or the mailbox is unavailable, run npm run disable-2fa on the server, then restart the service; this is local-shell only.',
+  '密码与邮箱验证码共同保护登录。SMTP 服务器仅用于发送验证码和测试邮件。':
+    'The password and email code protect sign-in together. SMTP is used only for codes and test messages.',
+  '保存下面任一项设置时都需要当前密码。':
+    'The current password is required to save either setting below.',
+  'SMTP 已配置。展开可修改服务器、发件人或重新发送测试邮件。':
+    'SMTP is configured. Expand to edit the server, sender or send another test message.',
+  'SMTP 尚未配置，暂时无法开启邮箱验证。请展开 SMTP 设置并保存。':
+    'SMTP is not configured; email verification cannot be enabled. Expand SMTP settings and save first.',
+  '收起': 'Collapse',
+  '语音渠道': 'Voice provider',
+  '当前': 'Current',
   'SMTP 服务器': 'SMTP server',
   '端口': 'Port',
   '连接方式': 'Connection',

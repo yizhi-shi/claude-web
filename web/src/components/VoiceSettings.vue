@@ -32,6 +32,7 @@ interface FormState {
 
 const config = ref<VoiceConfigView | null>(null);
 const active = ref<VoiceProviderId>('gemini');
+const selectedProvider = ref<VoiceProviderId>('gemini');
 const saving = ref<VoiceProviderId | null>(null);
 const testing = ref<VoiceProviderId | null>(null);
 const results = reactive<Record<string, { ok?: boolean; detail?: string; latencyMs?: number }>>({});
@@ -127,6 +128,7 @@ async function load(): Promise<void> {
     const view = await api.voiceConfig();
     config.value = view;
     active.value = view.active;
+    selectedProvider.value = view.active;
     fill('gemini', view);
     fill('openai', view);
     fill('volcengine', view);
@@ -170,6 +172,7 @@ async function save(id: VoiceProviderId): Promise<void> {
     });
     config.value = view;
     active.value = view.active;
+    selectedProvider.value = id;
     fill(id, view);
     toast(t('语音渠道已保存并设为当前'), 'success');
     delete results[id];
@@ -234,12 +237,29 @@ onMounted(load);
     <div v-if="!config" class="settings-loading"><span class="spinner" />{{ t('读取配置…') }}</div>
 
     <template v-else>
-      <div class="provider-grid">
-        <article
+      <div class="provider-tabs" role="tablist" :aria-label="t('语音渠道')">
+        <button
           v-for="id in (['gemini', 'openai', 'volcengine', 'browser'] as VoiceProviderId[])"
+          :key="id"
+          type="button"
+          class="provider-tab"
+          :class="{ active: selectedProvider === id }"
+          role="tab"
+          :aria-selected="selectedProvider === id"
+          @click="selectedProvider = id"
+        >
+          <span>{{ t(config.builtin[id]?.label ?? id) }}</span>
+          <span v-if="active === id" class="provider-tab-current">{{ t('当前') }}</span>
+        </button>
+      </div>
+
+      <div class="provider-grid single">
+        <article
+          v-for="id in [selectedProvider]"
           :key="id"
           class="provider-card"
           :class="{ current: active === id }"
+          role="tabpanel"
         >
           <header class="provider-head">
             <div>

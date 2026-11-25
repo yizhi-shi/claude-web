@@ -40,7 +40,7 @@ Provider research and implementation for whole-utterance transcription and real-
 
 ### [UI design and interaction decisions](UI-DESIGN.md) (Chinese)
 
-Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, diff/code readability, the language switch, and accessibility details.
+Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, voice provider tabs), diff/code readability, the language switch, and accessibility details.
 
 ### [VS Code extension feature parity](FEATURE-PARITY.md) (Chinese)
 

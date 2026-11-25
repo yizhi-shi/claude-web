@@ -38,6 +38,7 @@ const smtpPassword = ref('');
 const smtpFrom = ref('');
 const smtpFromName = ref('');
 const smtpSource = ref<'file' | 'env' | 'none'>('none');
+const smtpOpen = ref(false);
 const themeIcons: Record<ThemeMode, string> = {
   system: 'smartphone',
   light: 'sun',
@@ -153,6 +154,7 @@ function applySecurity(view: SecurityView): void {
   smtpFromName.value = view.smtp.fromName;
   smtpSource.value = view.smtp.source;
   smtpPassword.value = '';
+  if (!view.smtp.configured) smtpOpen.value = true;
 }
 
 async function loadSecurity(): Promise<void> {
@@ -272,7 +274,7 @@ onMounted(() => {
       </header>
 
       <div class="settings-grid">
-        <section class="panel settings-section">
+        <section class="panel settings-section settings-account">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">ACCOUNT</p>
@@ -311,45 +313,85 @@ onMounted(() => {
             </button>
           </div>
 
-          <div class="password-form email-2fa">
-            <div class="setting-block">
-              <span class="mini-label">{{ t('邮箱登录验证') }}</span>
-              <p class="muted">
-                {{ t('开启后，登录需要先输入密码，再输入发送到邮箱的 6 位验证码。') }}
-              </p>
-            </div>
+          <div class="setting-block account-note">
+            <span class="mini-label">{{ t('账号安全') }}</span>
+            <p class="muted">
+              {{ t('密码修改后，其他设备会退出登录；邮箱验证码在下方「登录安全」中配置。') }}
+            </p>
+          </div>
+        </section>
 
-            <div v-if="!security" class="settings-loading">
-              <span class="spinner" />{{ t('读取安全设置…') }}
+        <section class="panel settings-section settings-appearance">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">APPEARANCE</p>
+              <h2>{{ t('外观') }}</h2>
             </div>
+          </div>
+          <p class="section-lead">
+            {{ t('这里配置的是服务端默认外观，作用于登录页和所有尚未单独切换的浏览器。当前浏览器可随时在左下角切换。') }}
+          </p>
+          <div class="theme-mode-grid">
+            <button
+              v-for="mode in (['system', 'light', 'dark'] as ThemeMode[])"
+              :key="mode"
+              class="theme-mode-card"
+              :class="{ active: serverTheme === mode }"
+              :disabled="themeBusy"
+              @click="saveDefaultTheme(mode)"
+            >
+              <span class="theme-mode-icon"><Icon :name="themeIcons[mode]" :size="18" /></span>
+              <span class="theme-mode-copy">
+                <strong>{{ mode === 'system' ? t('跟随系统') : mode === 'light' ? t('浅色') : t('深色') }}</strong>
+                <span>{{ t(themeDescriptions[mode]) }}</span>
+              </span>
+              <Icon v-if="serverTheme === mode" name="check" :size="15" class="theme-check" />
+            </button>
+          </div>
 
-            <template v-else>
-              <label class="check-row">
-                <input
-                  v-model="securityEnabled"
-                  type="checkbox"
-                  :disabled="
-                    securityBusy || (!security.emailConfigured && !security.emailVerificationEnabled)
-                  "
-                />
-                <span>{{ t('启用邮箱验证码') }}</span>
-                <span class="mini-label">
-                  {{ security.emailVerificationEnabled ? t('已开启') : t('已关闭') }}
+          <div class="setting-block">
+            <span class="mini-label">{{ t('界面语言') }}</span>
+            <div class="theme-mode-grid">
+              <button
+                v-for="item in ([{ value: 'zh', label: '中文', desc: '简体中文界面' }, { value: 'en', label: 'English', desc: 'English interface' }] as const)"
+                :key="item.value"
+                class="theme-mode-card"
+                :class="{ active: locale === item.value }"
+                @click="setLocale(item.value)"
+              >
+                <span class="theme-mode-icon"><Icon name="globe" :size="18" /></span>
+                <span class="theme-mode-copy">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ t(item.desc) }}</span>
                 </span>
-              </label>
+                <Icon v-if="locale === item.value" name="check" :size="15" class="theme-check" />
+              </button>
+            </div>
+            <p class="section-note">{{ t('语言只影响控制台界面，不会改变 Claude 的输出语言。') }}</p>
+          </div>
+        </section>
 
-              <label class="field">
-                <span>{{ t('接收验证码的邮箱') }}</span>
-                <input
-                  v-model="securityEmail"
-                  type="email"
-                  autocomplete="email"
-                  spellcheck="false"
-                  :disabled="securityBusy"
-                  placeholder="name@example.com"
-                />
-              </label>
+        <section class="panel settings-section settings-security">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SECURITY</p>
+              <h2>{{ t('登录安全') }}</h2>
+            </div>
+            <span class="panel-hint">
+              {{ security?.emailVerificationEnabled ? t('邮箱验证已开启') : t('仅密码登录') }}
+            </span>
+          </div>
 
+          <p class="section-lead">
+            {{ t('密码与邮箱验证码共同保护登录。SMTP 服务器仅用于发送验证码和测试邮件。') }}
+          </p>
+
+          <div v-if="!security" class="settings-loading">
+            <span class="spinner" />{{ t('读取安全设置…') }}
+          </div>
+
+          <template v-else>
+            <div class="security-confirm">
               <label class="field">
                 <span>{{ t('当前密码（修改安全设置时确认）') }}</span>
                 <input
@@ -359,11 +401,68 @@ onMounted(() => {
                   :disabled="securityBusy || securityTestBusy"
                 />
               </label>
+              <p class="section-note">{{ t('保存下面任一项设置时都需要当前密码。') }}</p>
+            </div>
 
-              <div class="setting-block smtp-block">
-                <span class="mini-label">
-                  {{ t('SMTP 邮件服务器') }}
-                  <em class="smtp-source">
+            <div class="security-columns">
+              <div class="security-column">
+                <div class="security-column-head">
+                  <span class="mini-label">{{ t('邮箱验证码') }}</span>
+                  <span class="security-status">
+                    {{ security.emailVerificationEnabled ? t('已开启') : t('已关闭') }}
+                  </span>
+                </div>
+
+                <label class="check-row">
+                  <input
+                    v-model="securityEnabled"
+                    type="checkbox"
+                    :disabled="
+                      securityBusy || (!security.emailConfigured && !security.emailVerificationEnabled)
+                    "
+                  />
+                  <span>{{ t('启用邮箱验证码') }}</span>
+                </label>
+
+                <label class="field">
+                  <span>{{ t('接收验证码的邮箱') }}</span>
+                  <input
+                    v-model="securityEmail"
+                    type="email"
+                    autocomplete="email"
+                    spellcheck="false"
+                    :disabled="securityBusy"
+                    placeholder="name@example.com"
+                  />
+                </label>
+
+                <p class="section-note">
+                  {{ t('开启后，登录需要先输入密码，再输入发送到邮箱的 6 位验证码。') }}
+                </p>
+
+                <div class="security-actions">
+                  <button class="btn primary" :disabled="securityBusy" @click="saveSecurity">
+                    <Icon name="shield" :size="15" />
+                    {{ securityBusy ? t('保存中…') : t('保存邮箱验证') }}
+                  </button>
+                </div>
+
+                <div class="setting-block security-recovery">
+                  <span class="mini-label">{{ t('无法收邮件时') }}</span>
+                  <p class="section-note">
+                    {{
+                      t(
+                        'SMTP 故障或邮箱不可用时，在服务器执行 npm run disable-2fa，再重启服务；该操作只允许本地 shell。',
+                      )
+                    }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="security-column">
+                <div class="security-column-head">
+                  <span class="mini-label">{{ t('SMTP 邮件服务器') }}</span>
+                  <span class="security-status">
                     {{
                       smtpSource === 'env'
                         ? t('来自服务端环境配置')
@@ -371,125 +470,135 @@ onMounted(() => {
                           ? t('来自本机设置')
                           : t('未配置')
                     }}
-                  </em>
-                </span>
-                <div class="grid-2">
+                  </span>
+                </div>
+
+                <div class="smtp-summary">
+                  <code>{{ smtpHost ? `${smtpHost}:${smtpPort}` : t('未配置') }}</code>
+                  <span class="smtp-summary-mode">
+                    {{ smtpSecurity === 'ssl' ? 'SSL' : 'STARTTLS' }}
+                  </span>
+                  <button type="button" class="mini-link" @click="smtpOpen = !smtpOpen">
+                    {{ smtpOpen ? t('收起') : t('编辑') }}
+                  </button>
+                </div>
+
+                <div v-if="smtpOpen" class="smtp-fields">
+                  <div class="grid-2">
+                    <label class="field">
+                      <span>{{ t('SMTP 服务器') }}</span>
+                      <input
+                        v-model="smtpHost"
+                        type="text"
+                        spellcheck="false"
+                        :disabled="securityBusy"
+                        placeholder="smtp.example.com"
+                      />
+                    </label>
+                    <label class="field">
+                      <span>{{ t('端口') }}</span>
+                      <input
+                        v-model.number="smtpPort"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        :disabled="securityBusy"
+                      />
+                    </label>
+                  </div>
+                  <div class="grid-2">
+                    <label class="field">
+                      <span>{{ t('连接方式') }}</span>
+                      <select v-model="smtpSecurity" :disabled="securityBusy">
+                        <option value="ssl">SSL（通常 465）</option>
+                        <option value="starttls">STARTTLS（通常 587）</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>{{ t('SMTP 用户名') }}</span>
+                      <input
+                        v-model="smtpUser"
+                        type="text"
+                        autocomplete="username"
+                        spellcheck="false"
+                        :disabled="securityBusy"
+                      />
+                    </label>
+                  </div>
+                  <div class="grid-2">
+                    <label class="field">
+                      <span>{{ t('SMTP 密码') }}</span>
+                      <input
+                        v-model="smtpPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        :disabled="securityBusy"
+                        :placeholder="
+                          security.smtp.hasPassword ? t('已保存，留空不修改') : t('输入 SMTP 密码')
+                        "
+                      />
+                    </label>
+                    <label class="field">
+                      <span>{{ t('发件地址') }}</span>
+                      <input
+                        v-model="smtpFrom"
+                        type="email"
+                        autocomplete="email"
+                        spellcheck="false"
+                        :disabled="securityBusy"
+                        placeholder="name@example.com"
+                      />
+                    </label>
+                  </div>
                   <label class="field">
-                    <span>{{ t('SMTP 服务器') }}</span>
+                    <span>{{ t('发件人名称') }}</span>
                     <input
-                      v-model="smtpHost"
+                      v-model="smtpFromName"
                       type="text"
-                      spellcheck="false"
                       :disabled="securityBusy"
-                      placeholder="smtp.example.com"
+                      placeholder="claude web"
                     />
                   </label>
-                  <label class="field">
-                    <span>{{ t('端口') }}</span>
-                    <input
-                      v-model.number="smtpPort"
-                      type="number"
-                      min="1"
-                      max="65535"
-                      :disabled="securityBusy"
-                    />
-                  </label>
+                  <p class="section-note">
+                    {{
+                      t(
+                        '保存 SMTP 设置时会先发送一封测试邮件；密码留空表示保持已保存密码。SMTP 密码只保存在服务端 data/mail.json（0600），不会回显。',
+                      )
+                    }}
+                  </p>
+                  <div class="security-actions">
+                    <button class="btn secondary" :disabled="securityBusy" @click="saveSmtpSettings">
+                      <Icon name="server" :size="15" />
+                      {{ securityBusy ? t('保存中…') : t('保存 SMTP 设置') }}
+                    </button>
+                    <button
+                      class="btn ghost small"
+                      :disabled="securityTestBusy || securityBusy || !security.emailConfigured"
+                      @click="sendSecurityTest"
+                    >
+                      <Icon name="mail" :size="15" />
+                      {{ securityTestBusy ? t('发送中…') : t('发送测试邮件') }}
+                    </button>
+                  </div>
                 </div>
-                <div class="grid-2">
-                  <label class="field">
-                    <span>{{ t('连接方式') }}</span>
-                    <select v-model="smtpSecurity" :disabled="securityBusy">
-                      <option value="ssl">SSL（通常 465）</option>
-                      <option value="starttls">STARTTLS（通常 587）</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>{{ t('SMTP 用户名') }}</span>
-                    <input
-                      v-model="smtpUser"
-                      type="text"
-                      autocomplete="username"
-                      spellcheck="false"
-                      :disabled="securityBusy"
-                    />
-                  </label>
-                </div>
-                <div class="grid-2">
-                  <label class="field">
-                    <span>{{ t('SMTP 密码') }}</span>
-                    <input
-                      v-model="smtpPassword"
-                      type="password"
-                      autocomplete="new-password"
-                      :disabled="securityBusy"
-                      :placeholder="
-                        security.smtp.hasPassword ? t('已保存，留空不修改') : t('输入 SMTP 密码')
-                      "
-                    />
-                  </label>
-                  <label class="field">
-                    <span>{{ t('发件地址') }}</span>
-                    <input
-                      v-model="smtpFrom"
-                      type="email"
-                      autocomplete="email"
-                      spellcheck="false"
-                      :disabled="securityBusy"
-                      placeholder="name@example.com"
-                    />
-                  </label>
-                </div>
-                <label class="field">
-                  <span>{{ t('发件人名称') }}</span>
-                  <input
-                    v-model="smtpFromName"
-                    type="text"
-                    :disabled="securityBusy"
-                    placeholder="Claude Code Web"
-                  />
-                </label>
-                <p class="section-note">
-                  {{
-                    t(
-                      '保存 SMTP 设置时会先发送一封测试邮件；密码留空表示保持已保存密码。SMTP 密码只保存在服务端 data/mail.json（0600），不会回显。',
-                    )
-                  }}
+
+                <p v-else class="section-note">
+                  {{ t('SMTP 已配置。展开可修改服务器、发件人或重新发送测试邮件。') }}
                 </p>
-                <div class="security-actions">
-                  <button class="btn secondary" :disabled="securityBusy" @click="saveSmtpSettings">
-                    <Icon name="server" :size="15" />
-                    {{ securityBusy ? t('保存中…') : t('保存 SMTP 设置') }}
-                  </button>
-                  <button
-                    class="btn ghost small"
-                    :disabled="securityTestBusy || securityBusy || !security.emailConfigured"
-                    @click="sendSecurityTest"
-                  >
-                    <Icon name="mail" :size="15" />
-                    {{ securityTestBusy ? t('发送中…') : t('发送测试邮件') }}
-                  </button>
-                </div>
               </div>
+            </div>
 
-              <p v-if="!security.emailConfigured" class="form-error">
-                <Icon name="alert" :size="15" />
-                {{ t('SMTP 尚未配置，暂时无法开启邮箱验证。请先填写并保存 SMTP 设置。') }}
-              </p>
-              <p v-if="securityError" class="form-error">
-                <Icon name="alert" :size="15" />{{ securityError }}
-              </p>
-
-              <div class="security-actions">
-                <button class="btn primary" :disabled="securityBusy" @click="saveSecurity">
-                  <Icon name="shield" :size="15" />
-                  {{ securityBusy ? t('保存中…') : t('保存邮箱验证') }}
-                </button>
-              </div>
-            </template>
-          </div>
+            <p v-if="!security.emailConfigured" class="form-error">
+              <Icon name="alert" :size="15" />
+              {{ t('SMTP 尚未配置，暂时无法开启邮箱验证。请展开 SMTP 设置并保存。') }}
+            </p>
+            <p v-if="securityError" class="form-error">
+              <Icon name="alert" :size="15" />{{ securityError }}
+            </p>
+          </template>
         </section>
 
-        <section class="panel settings-section settings-wide">
+        <section class="panel settings-section settings-workspaces">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">WORKSPACES</p>
@@ -556,7 +665,7 @@ onMounted(() => {
           </template>
         </section>
 
-        <section class="panel settings-section">
+        <section class="panel settings-section settings-runtime">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">RUNTIME</p>
@@ -613,59 +722,9 @@ onMounted(() => {
           </div>
         </section>
 
-        <VoiceSettings class="settings-wide" />
+        <VoiceSettings class="settings-voice" />
 
-        <section class="panel settings-section">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">APPEARANCE</p>
-              <h2>{{ t('外观') }}</h2>
-            </div>
-          </div>
-          <p class="section-lead">
-            {{ t('这里配置的是服务端默认外观，作用于登录页和所有尚未单独切换的浏览器。当前浏览器可随时在左下角切换。') }}
-          </p>
-          <div class="theme-mode-grid">
-            <button
-              v-for="mode in (['system', 'light', 'dark'] as ThemeMode[])"
-              :key="mode"
-              class="theme-mode-card"
-              :class="{ active: serverTheme === mode }"
-              :disabled="themeBusy"
-              @click="saveDefaultTheme(mode)"
-            >
-              <span class="theme-mode-icon"><Icon :name="themeIcons[mode]" :size="18" /></span>
-              <span class="theme-mode-copy">
-                <strong>{{ mode === 'system' ? t('跟随系统') : mode === 'light' ? t('浅色') : t('深色') }}</strong>
-                <span>{{ t(themeDescriptions[mode]) }}</span>
-              </span>
-              <Icon v-if="serverTheme === mode" name="check" :size="15" class="theme-check" />
-            </button>
-          </div>
-
-          <div class="setting-block">
-            <span class="mini-label">{{ t('界面语言') }}</span>
-            <div class="theme-mode-grid">
-              <button
-                v-for="item in ([{ value: 'zh', label: '中文', desc: '简体中文界面' }, { value: 'en', label: 'English', desc: 'English interface' }] as const)"
-                :key="item.value"
-                class="theme-mode-card"
-                :class="{ active: locale === item.value }"
-                @click="setLocale(item.value)"
-              >
-                <span class="theme-mode-icon"><Icon name="globe" :size="18" /></span>
-                <span class="theme-mode-copy">
-                  <strong>{{ item.label }}</strong>
-                  <span>{{ t(item.desc) }}</span>
-                </span>
-                <Icon v-if="locale === item.value" name="check" :size="15" class="theme-check" />
-              </button>
-            </div>
-            <p class="section-note">{{ t('语言只影响控制台界面，不会改变 Claude 的输出语言。') }}</p>
-          </div>
-        </section>
-
-        <section class="panel settings-section">
+        <section class="panel settings-section settings-notes">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">SECURITY</p>
