@@ -45,10 +45,9 @@ sudo ./install.sh --system --dir /opt/claude-web --user "$SUDO_USER"
 3. 创建后自动登录；密码以 bcrypt 哈希存 `data/auth.json`（0600）。
 4. 连续 5 次密码错误锁定该账号 1 小时。
 5. 邮箱验证码（可选）：
-   - 准备一个 0600 的 SMTP 凭据文件，配置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURITY`、`SMTP_USER`、`SMTP_PASS`、`MAIL_FROM`，可选 `MAIL_TO`。
-   - 在 `data/claude-web.env` 设置 `MAIL_ENV_FILE=/path/to/mail.env`，重启服务。
-   - 登录后到「设置 → 管理员账号 → 邮箱登录验证」，保存邮箱并开启。
-   - 登录将变成“密码 + 邮箱 6 位验证码”；验证码 10 分钟过期，最多尝试 5 次。
+   - 推荐直接在「设置 → 管理员账号 → 邮箱登录验证」填写 SMTP 服务器、端口、SSL/STARTTLS、用户名、密码和发件地址；保存时会先发一封测试邮件，成功后才写入 `data/mail.json`（0600）。
+   - 也可以准备一个 0600 的 SMTP 凭据文件（`SMTP_HOST/PORT/SECURITY/USER/PASS`、`MAIL_FROM/MAIL_TO`），在 `data/claude-web.env` 设置 `MAIL_ENV_FILE=/path/to/mail.env` 作为回退；设置页保存的 `data/mail.json` 优先。
+   - 保存收件邮箱并开启邮箱验证后，登录将变成“密码 + 邮箱 6 位验证码”；验证码 10 分钟过期，最多尝试 5 次。
    - SMTP 故障或邮箱不可用时，在服务器执行 `npm run disable-2fa`，再重启服务；这是本地 break-glass，不通过 Web 暴露。
 6. 忘记密码：
    ```bash

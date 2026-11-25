@@ -31,6 +31,7 @@ data/
   auth.json          bcrypt 管理员
   session.secret     Cookie/邮件验证码 HMAC
   security.json      邮箱验证收件地址与开关（0600）
+  mail.json          设置页保存的 SMTP 配置（0600，密码只写不读）
   workspaces.json    默认/额外工作区
   preferences.json   默认外观（system/dark/light）
   sessions.json      Web 会话索引

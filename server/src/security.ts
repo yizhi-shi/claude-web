@@ -6,11 +6,15 @@ import { getUsername, hmacHex, verifyCurrentPassword } from './auth.js';
 import { config } from './config.js';
 import {
   defaultMailRecipient,
+  getMailSettingsView,
   isMailConfigured,
   maskEmail,
   sendLoginCode,
   sendSecurityNotice,
   sendSecurityTest as sendMailTest,
+  updateMailSettings,
+  type MailSettingsInput,
+  type MailSettingsView,
 } from './mail.js';
 import { atomicWriteJson, HttpError, safeEqual } from './util.js';
 
@@ -26,6 +30,7 @@ export interface SecurityView {
   email: string;
   emailVerificationEnabled: boolean;
   emailConfigured: boolean;
+  smtp: MailSettingsView;
 }
 
 interface SecurityFile {
@@ -133,6 +138,7 @@ export function getSecurityView(): SecurityView {
     email: current.email,
     emailVerificationEnabled: current.emailVerificationEnabled,
     emailConfigured: isMailConfigured(),
+    smtp: getMailSettingsView(),
   };
 }
 
@@ -226,8 +232,9 @@ export async function sendSecurityTest(currentPassword: unknown): Promise<void> 
   if (!current.email) throw new HttpError(400, '请先填写邮箱地址');
   if (!isMailConfigured()) throw new HttpError(503, '服务端未配置 SMTP');
   const username = getUsername();
-  sendWindow(username);
-  markSend(username);
+  const testKey = `test:${username}`;
+  sendWindow(testKey);
+  markSend(testKey);
   try {
     await sendMailTest(current.email);
   } catch (error) {
@@ -235,6 +242,29 @@ export async function sendSecurityTest(currentPassword: unknown): Promise<void> 
     throw new HttpError(502, '测试邮件发送失败');
   }
   audit('security.email_test', { email: maskEmail(current.email) });
+}
+
+export async function updateMailSecuritySettings(
+  input: MailSettingsInput,
+  currentPassword: unknown,
+): Promise<SecurityView> {
+  await requireCurrentPassword(currentPassword);
+  const current = state();
+  if (!current.email) throw new HttpError(400, '请先填写接收验证码的邮箱地址');
+  const username = getUsername();
+  const testKey = `test:${username}`;
+  sendWindow(testKey);
+  markSend(testKey);
+  // updateMailSettings sends a test message with the candidate config before
+  // writing it, so a broken SMTP change cannot lock out the next login.
+  const saved = await updateMailSettings(input, current.email);
+  audit('security.smtp_config', {
+    host: saved.host,
+    port: saved.port,
+    security: saved.security,
+    user: maskEmail(saved.user),
+  });
+  return getSecurityView();
 }
 
 export interface LoginChallengeView {

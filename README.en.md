@@ -151,7 +151,7 @@ Acceptance: health returns ok, the service is active, port 8010 is listening, an
 2. Choose a username (letters, digits, `.` `_` `@` `-`, 1–64 characters) and a password (at least 8 characters), then confirm.
 3. Successful creation logs you in automatically. The password is stored only as a bcrypt hash in local `data/auth.json` (0600) and is never committed to Git.
 4. Five consecutive wrong passwords lock the account for one hour; the login endpoint also has per-IP rate limiting.
-5. Enable email codes under Settings → Administrator account → Email sign-in verification. Configure SMTP first (see `MAIL_ENV_FILE`); after enabling, sign-in needs the password plus an email code. If SMTP breaks, run `npm run disable-2fa` on the server to disable it locally.
+5. Configure the SMTP server (host/port/SSL/username/password/From address) and enable email codes under Settings → Administrator account → Email sign-in verification. The SMTP password is stored only in server-side `data/mail.json` (0600) and is never returned; `MAIL_ENV_FILE` remains a fallback. After enabling, sign-in needs the password plus an email code. If SMTP breaks, run `npm run disable-2fa` on the server to disable it locally.
 6. Forgot your password? On the server, run:
    ```bash
    npm run set-password -- <username> <new-password>
@@ -199,7 +199,7 @@ npm run dev:web      # Vite, :5173, proxies /api and /ws
 | `ACCOUNT_LOCK_MINUTES` | `60` | Lockout duration in minutes |
 | `CLAUDE_BIN` | `claude` on `PATH` | Absolute path to the CLI (recommended for systemd) |
 | `TRUST_PROXY` | `true` | Read the real client IP behind a reverse proxy |
-| `MAIL_ENV_FILE` | `./data/mail.env` | Optional SMTP credential file (`SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM/MAIL_TO`) used for email codes; keep it 0600 |
+| `MAIL_ENV_FILE` | `./data/mail.env` | SMTP credential fallback (`SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM/MAIL_TO`); `data/mail.json` saved from Settings takes precedence. Keep both 0600 |
 | `SESSION_DAYS` | `7` | Login cookie lifetime in days; shorten it when email verification is enabled |
 | `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`; use `always` for public HTTPS |
 | `VOICE_PROXY_URL` | empty | Optional HTTP egress proxy for voice requests (local proxy or corporate gateway); direct when unset |

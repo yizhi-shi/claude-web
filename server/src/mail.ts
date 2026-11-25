@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import nodemailer from 'nodemailer';
 import { config } from './config.js';
-import { HttpError } from './util.js';
+import { atomicWriteJson, HttpError, readJson } from './util.js';
+
+type MailSecurity = 'ssl' | 'starttls';
+type MailSource = 'file' | 'env' | 'none';
 
 interface MailConfig {
   host: string;
@@ -16,7 +19,43 @@ interface MailConfig {
   to: string;
 }
 
+interface SavedMailFile {
+  version: 1;
+  host: string;
+  port: number;
+  security: MailSecurity;
+  user: string;
+  pass: string;
+  from: string;
+  fromName: string;
+  updatedAt: string;
+}
+
+export interface MailSettingsView {
+  configured: boolean;
+  source: MailSource;
+  host: string;
+  port: number;
+  security: MailSecurity;
+  user: string;
+  from: string;
+  fromName: string;
+  /** The password is write-only; the API never returns it. */
+  hasPassword: boolean;
+}
+
+export interface MailSettingsInput {
+  host?: unknown;
+  port?: unknown;
+  security?: unknown;
+  user?: unknown;
+  password?: unknown;
+  from?: unknown;
+  fromName?: unknown;
+}
+
 const ADDRESS_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const MAIL_FILE = path.join(config.dataDir, 'mail.json');
 
 function clean(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -53,8 +92,79 @@ function envValue(env: Record<string, string>, names: string[]): string {
   return '';
 }
 
-/** Read SMTP settings from MAIL_ENV_FILE first, then process env. */
-function readConfig(): MailConfig | null {
+function assertAddress(value: string, label: string): string {
+  const address = clean(value);
+  if (!address || address.length > 254 || /[\r\n]/.test(address) || !ADDRESS_RE.test(address)) {
+    throw new HttpError(400, `${label}邮箱地址无效`);
+  }
+  return address;
+}
+
+function normalizeSecurity(value: unknown): MailSecurity {
+  const raw = clean(value).toLowerCase();
+  return raw === 'starttls' || raw === 'tls' ? 'starttls' : 'ssl';
+}
+
+function normalizePort(value: unknown, fallback: number): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    if (value === undefined || value === '') return fallback;
+    throw new HttpError(400, 'SMTP 端口无效');
+  }
+  return port;
+}
+
+function makeConfig(input: {
+  host: string;
+  port: number;
+  security: MailSecurity;
+  user: string;
+  pass: string;
+  from: string;
+  fromName: string;
+  to?: string;
+}): MailConfig {
+  const host = clean(input.host);
+  const user = clean(input.user);
+  const pass = clean(input.pass);
+  const from = assertAddress(input.from || user, '发件');
+  if (!host || /[\s/]/.test(host)) throw new HttpError(400, 'SMTP 服务器地址无效');
+  if (!user) throw new HttpError(400, 'SMTP 用户名不能为空');
+  if (!pass) throw new HttpError(400, 'SMTP 密码不能为空');
+  const secure = input.security === 'ssl';
+  return {
+    host,
+    port: normalizePort(input.port, secure ? 465 : 587),
+    secure,
+    requireTls: !secure,
+    user,
+    pass,
+    from,
+    fromName: clean(input.fromName) || 'Claude Code Web',
+    to: clean(input.to),
+  };
+}
+
+function savedConfig(): { config: MailConfig; source: MailSource } | null {
+  const parsed = readJson<SavedMailFile | null>(MAIL_FILE, null);
+  if (!parsed || parsed.version !== 1 || typeof parsed !== 'object') return null;
+  try {
+    const cfg = makeConfig({
+      host: parsed.host,
+      port: parsed.port,
+      security: normalizeSecurity(parsed.security),
+      user: parsed.user,
+      pass: parsed.pass,
+      from: parsed.from,
+      fromName: parsed.fromName,
+    });
+    return { config: cfg, source: 'file' };
+  } catch {
+    return null;
+  }
+}
+
+function envConfig(): { config: MailConfig; source: MailSource } | null {
   const file = config.mailEnvFile;
   const fileEnv = file ? parseEnvFile(path.resolve(file)) : {};
   const env: Record<string, string> = { ...fileEnv };
@@ -70,35 +180,69 @@ function readConfig(): MailConfig | null {
   ]) {
     if (process.env[key] !== undefined) env[key] = process.env[key] as string;
   }
-
   const host = envValue(env, ['SMTP_HOST']);
   const user = envValue(env, ['SMTP_USER']);
   const pass = envValue(env, ['SMTP_PASS']);
   const from = envValue(env, ['MAIL_FROM']) || user;
   if (!host || !user || !pass || !from) return null;
-  if (!ADDRESS_RE.test(from)) return null;
+  try {
+    return {
+      config: makeConfig({
+        host,
+        port: Number(envValue(env, ['SMTP_PORT']) || 465),
+        security: normalizeSecurity(envValue(env, ['SMTP_SECURITY'])),
+        user,
+        pass,
+        from,
+        fromName: envValue(env, ['MAIL_FROM_NAME']),
+        to: envValue(env, ['MAIL_TO']),
+      }),
+      source: 'env',
+    };
+  } catch {
+    return null;
+  }
+}
 
-  const port = Number(envValue(env, ['SMTP_PORT']) || 465);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  const security = (envValue(env, ['SMTP_SECURITY']) || 'ssl').toLowerCase();
-  const secure = security !== 'starttls' && security !== 'tls';
-  const fromName = envValue(env, ['MAIL_FROM_NAME']) || 'Claude Code Web';
+function resolved(): { config: MailConfig; source: MailSource } | null {
+  return savedConfig() ?? envConfig();
+}
 
-  return {
-    host,
-    port,
-    secure,
-    requireTls: !secure,
-    user,
-    pass,
-    from,
-    fromName,
-    to: envValue(env, ['MAIL_TO']),
-  };
+function readConfig(): MailConfig | null {
+  return resolved()?.config ?? null;
 }
 
 export function isMailConfigured(): boolean {
-  return readConfig() !== null;
+  return resolved() !== null;
+}
+
+export function getMailSettingsView(): MailSettingsView {
+  const value = resolved();
+  if (!value) {
+    return {
+      configured: false,
+      source: 'none',
+      host: '',
+      port: 465,
+      security: 'ssl',
+      user: '',
+      from: '',
+      fromName: 'Claude Code Web',
+      hasPassword: false,
+    };
+  }
+  const cfg = value.config;
+  return {
+    configured: true,
+    source: value.source,
+    host: cfg.host,
+    port: cfg.port,
+    security: cfg.secure ? 'ssl' : 'starttls',
+    user: cfg.user,
+    from: cfg.from,
+    fromName: cfg.fromName,
+    hasPassword: true,
+  };
 }
 
 /** Default recipient when the admin has not saved one yet. */
@@ -117,14 +261,6 @@ export function maskEmail(value: string): string {
   return `${visible}${'*'.repeat(Math.max(2, Math.min(6, local.length - visible.length)))}@${domain}`;
 }
 
-function assertAddress(value: string, label: string): string {
-  const address = clean(value);
-  if (!address || address.length > 254 || /[\r\n]/.test(address) || !ADDRESS_RE.test(address)) {
-    throw new HttpError(400, `${label}邮箱地址无效`);
-  }
-  return address;
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -133,14 +269,10 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-async function sendMail(input: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}): Promise<void> {
-  const cfg = readConfig();
-  if (!cfg) throw new HttpError(503, '邮件服务未配置，无法发送邮箱验证码');
+async function sendMailWith(
+  cfg: MailConfig,
+  input: { to: string; subject: string; text: string; html?: string },
+): Promise<void> {
   const to = assertAddress(input.to, '收件');
   const transport = nodemailer.createTransport({
     host: cfg.host,
@@ -171,6 +303,74 @@ async function sendMail(input: {
   } finally {
     transport.close();
   }
+}
+
+async function sendMail(input: {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}): Promise<void> {
+  const cfg = readConfig();
+  if (!cfg) throw new HttpError(503, '邮件服务未配置，无法发送邮箱验证码');
+  await sendMailWith(cfg, input);
+}
+
+/** Build a candidate config for validation/testing without saving it. */
+export function prepareMailSettings(input: MailSettingsInput): MailConfig {
+  const current = readConfig();
+  const password = clean(input.password) || current?.pass || '';
+  return makeConfig({
+    host: clean(input.host) || current?.host || '',
+    port: normalizePort(input.port, current?.port ?? 465),
+    security:
+      input.security === undefined || input.security === ''
+        ? current
+          ? current.secure
+            ? 'ssl'
+            : 'starttls'
+          : 'ssl'
+        : normalizeSecurity(input.security),
+    user: clean(input.user) || current?.user || '',
+    pass: password,
+    from: clean(input.from) || current?.from || '',
+    fromName: clean(input.fromName) || current?.fromName || 'Claude Code Web',
+  });
+}
+
+export async function testMailConfig(cfg: MailConfig, to: string): Promise<void> {
+  const text = [
+    'Claude Code Web 邮件服务测试',
+    '',
+    '如果你收到这封邮件，说明当前的 SMTP 配置可用于登录邮箱验证。',
+    '',
+    '这封邮件不包含验证码，不需要回复。',
+  ].join('\n');
+  const html = `<p>Claude Code Web 邮件服务测试</p>
+<p>如果你收到这封邮件，说明当前的 SMTP 配置可用于登录邮箱验证。</p>
+<p>这封邮件不包含验证码，不需要回复。</p>`;
+  await sendMailWith(cfg, { to, subject: 'Claude Code Web 邮件服务测试', text, html });
+}
+
+export async function updateMailSettings(
+  input: MailSettingsInput,
+  testRecipient?: string,
+): Promise<MailSettingsView> {
+  const cfg = prepareMailSettings(input);
+  if (testRecipient) await testMailConfig(cfg, testRecipient);
+  const saved: SavedMailFile = {
+    version: 1,
+    host: cfg.host,
+    port: cfg.port,
+    security: cfg.secure ? 'ssl' : 'starttls',
+    user: cfg.user,
+    pass: cfg.pass,
+    from: cfg.from,
+    fromName: cfg.fromName,
+    updatedAt: new Date().toISOString(),
+  };
+  atomicWriteJson(MAIL_FILE, saved);
+  return getMailSettingsView();
 }
 
 export async function sendLoginCode(
@@ -212,15 +412,7 @@ export async function sendSecurityNotice(to: string, enabled: boolean): Promise<
 }
 
 export async function sendSecurityTest(to: string): Promise<void> {
-  const text = [
-    'Claude Code Web 邮件服务测试',
-    '',
-    '如果你收到这封邮件，说明 SMTP 配置可用于登录邮箱验证。',
-    '',
-    '这封邮件不包含验证码，不需要回复。',
-  ].join('\n');
-  const html = `<p>Claude Code Web 邮件服务测试</p>
-<p>如果你收到这封邮件，说明 SMTP 配置可用于登录邮箱验证。</p>
-<p>这封邮件不包含验证码，不需要回复。</p>`;
-  await sendMail({ to, subject: 'Claude Code Web 邮件服务测试', text, html });
+  const cfg = readConfig();
+  if (!cfg) throw new HttpError(503, '邮件服务未配置，无法发送测试邮件');
+  await testMailConfig(cfg, to);
 }

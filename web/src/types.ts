@@ -46,10 +46,23 @@ export interface LoginResponse {
   resendAfterMs?: number;
 }
 
+export interface MailSettingsView {
+  configured: boolean;
+  source: 'file' | 'env' | 'none';
+  host: string;
+  port: number;
+  security: 'ssl' | 'starttls';
+  user: string;
+  from: string;
+  fromName: string;
+  hasPassword: boolean;
+}
+
 export interface SecurityView {
   email: string;
   emailVerificationEnabled: boolean;
   emailConfigured: boolean;
+  smtp: MailSettingsView;
 }
 
 export interface TaskView {

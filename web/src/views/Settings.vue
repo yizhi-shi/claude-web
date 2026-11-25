@@ -30,6 +30,14 @@ const securityPassword = ref('');
 const securityBusy = ref(false);
 const securityTestBusy = ref(false);
 const securityError = ref('');
+const smtpHost = ref('');
+const smtpPort = ref(465);
+const smtpSecurity = ref<'ssl' | 'starttls'>('ssl');
+const smtpUser = ref('');
+const smtpPassword = ref('');
+const smtpFrom = ref('');
+const smtpFromName = ref('');
+const smtpSource = ref<'file' | 'env' | 'none'>('none');
 const themeIcons: Record<ThemeMode, string> = {
   system: 'smartphone',
   light: 'sun',
@@ -133,11 +141,23 @@ async function changePassword(): Promise<void> {
   }
 }
 
+function applySecurity(view: SecurityView): void {
+  security.value = view;
+  securityEmail.value = view.email;
+  securityEnabled.value = view.emailVerificationEnabled;
+  smtpHost.value = view.smtp.host;
+  smtpPort.value = view.smtp.port;
+  smtpSecurity.value = view.smtp.security;
+  smtpUser.value = view.smtp.user;
+  smtpFrom.value = view.smtp.from;
+  smtpFromName.value = view.smtp.fromName;
+  smtpSource.value = view.smtp.source;
+  smtpPassword.value = '';
+}
+
 async function loadSecurity(): Promise<void> {
   try {
-    security.value = await api.security();
-    securityEmail.value = security.value.email;
-    securityEnabled.value = security.value.emailVerificationEnabled;
+    applySecurity(await api.security());
     securityError.value = '';
   } catch (err) {
     securityError.value =
@@ -158,16 +178,15 @@ async function saveSecurity(): Promise<void> {
   }
   securityBusy.value = true;
   try {
-    security.value = await api.updateSecurity({
+    const view = await api.updateSecurity({
       enabled: securityEnabled.value,
       email: securityEmail.value.trim(),
       currentPassword: securityPassword.value,
     });
-    securityEnabled.value = security.value.emailVerificationEnabled;
-    securityEmail.value = security.value.email;
+    applySecurity(view);
     securityPassword.value = '';
     toast(
-      security.value.emailVerificationEnabled
+      view.emailVerificationEnabled
         ? t('邮箱验证已开启，下次登录需要验证码')
         : t('邮箱验证已关闭'),
       'success',
@@ -197,6 +216,40 @@ async function sendSecurityTest(): Promise<void> {
       err instanceof ApiError ? translateServerMessage(err.message) : t('测试邮件发送失败');
   } finally {
     securityTestBusy.value = false;
+  }
+}
+
+async function saveSmtpSettings(): Promise<void> {
+  if (securityBusy.value) return;
+  securityError.value = '';
+  if (!securityPassword.value) {
+    securityError.value = t('请输入当前密码以保存 SMTP 设置');
+    return;
+  }
+  if (!smtpHost.value.trim() || !smtpUser.value.trim() || !smtpFrom.value.trim()) {
+    securityError.value = t('请填写 SMTP 服务器、用户名和发件地址');
+    return;
+  }
+  securityBusy.value = true;
+  try {
+    const view = await api.updateSecurityMail({
+      host: smtpHost.value.trim(),
+      port: Number(smtpPort.value) || 465,
+      security: smtpSecurity.value,
+      user: smtpUser.value.trim(),
+      ...(smtpPassword.value ? { password: smtpPassword.value } : {}),
+      from: smtpFrom.value.trim(),
+      fromName: smtpFromName.value.trim(),
+      currentPassword: securityPassword.value,
+    });
+    applySecurity(view);
+    securityPassword.value = '';
+    toast(t('SMTP 设置已保存，测试邮件已发送'), 'success');
+  } catch (err) {
+    securityError.value =
+      err instanceof ApiError ? translateServerMessage(err.message) : t('保存 SMTP 设置失败');
+  } finally {
+    securityBusy.value = false;
   }
 }
 
@@ -307,9 +360,120 @@ onMounted(() => {
                 />
               </label>
 
+              <div class="setting-block smtp-block">
+                <span class="mini-label">
+                  {{ t('SMTP 邮件服务器') }}
+                  <em class="smtp-source">
+                    {{
+                      smtpSource === 'env'
+                        ? t('来自服务端环境配置')
+                        : smtpSource === 'file'
+                          ? t('来自本机设置')
+                          : t('未配置')
+                    }}
+                  </em>
+                </span>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>{{ t('SMTP 服务器') }}</span>
+                    <input
+                      v-model="smtpHost"
+                      type="text"
+                      spellcheck="false"
+                      :disabled="securityBusy"
+                      placeholder="smtp.example.com"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{{ t('端口') }}</span>
+                    <input
+                      v-model.number="smtpPort"
+                      type="number"
+                      min="1"
+                      max="65535"
+                      :disabled="securityBusy"
+                    />
+                  </label>
+                </div>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>{{ t('连接方式') }}</span>
+                    <select v-model="smtpSecurity" :disabled="securityBusy">
+                      <option value="ssl">SSL（通常 465）</option>
+                      <option value="starttls">STARTTLS（通常 587）</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>{{ t('SMTP 用户名') }}</span>
+                    <input
+                      v-model="smtpUser"
+                      type="text"
+                      autocomplete="username"
+                      spellcheck="false"
+                      :disabled="securityBusy"
+                    />
+                  </label>
+                </div>
+                <div class="grid-2">
+                  <label class="field">
+                    <span>{{ t('SMTP 密码') }}</span>
+                    <input
+                      v-model="smtpPassword"
+                      type="password"
+                      autocomplete="new-password"
+                      :disabled="securityBusy"
+                      :placeholder="
+                        security.smtp.hasPassword ? t('已保存，留空不修改') : t('输入 SMTP 密码')
+                      "
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{{ t('发件地址') }}</span>
+                    <input
+                      v-model="smtpFrom"
+                      type="email"
+                      autocomplete="email"
+                      spellcheck="false"
+                      :disabled="securityBusy"
+                      placeholder="name@example.com"
+                    />
+                  </label>
+                </div>
+                <label class="field">
+                  <span>{{ t('发件人名称') }}</span>
+                  <input
+                    v-model="smtpFromName"
+                    type="text"
+                    :disabled="securityBusy"
+                    placeholder="Claude Code Web"
+                  />
+                </label>
+                <p class="section-note">
+                  {{
+                    t(
+                      '保存 SMTP 设置时会先发送一封测试邮件；密码留空表示保持已保存密码。SMTP 密码只保存在服务端 data/mail.json（0600），不会回显。',
+                    )
+                  }}
+                </p>
+                <div class="security-actions">
+                  <button class="btn secondary" :disabled="securityBusy" @click="saveSmtpSettings">
+                    <Icon name="server" :size="15" />
+                    {{ securityBusy ? t('保存中…') : t('保存 SMTP 设置') }}
+                  </button>
+                  <button
+                    class="btn ghost small"
+                    :disabled="securityTestBusy || securityBusy || !security.emailConfigured"
+                    @click="sendSecurityTest"
+                  >
+                    <Icon name="mail" :size="15" />
+                    {{ securityTestBusy ? t('发送中…') : t('发送测试邮件') }}
+                  </button>
+                </div>
+              </div>
+
               <p v-if="!security.emailConfigured" class="form-error">
                 <Icon name="alert" :size="15" />
-                {{ t('服务端尚未配置 SMTP，暂时无法开启邮箱验证。请配置 MAIL_ENV_FILE。') }}
+                {{ t('SMTP 尚未配置，暂时无法开启邮箱验证。请先填写并保存 SMTP 设置。') }}
               </p>
               <p v-if="securityError" class="form-error">
                 <Icon name="alert" :size="15" />{{ securityError }}
@@ -319,14 +483,6 @@ onMounted(() => {
                 <button class="btn primary" :disabled="securityBusy" @click="saveSecurity">
                   <Icon name="shield" :size="15" />
                   {{ securityBusy ? t('保存中…') : t('保存邮箱验证') }}
-                </button>
-                <button
-                  class="btn secondary"
-                  :disabled="securityTestBusy || securityBusy || !security.emailConfigured"
-                  @click="sendSecurityTest"
-                >
-                  <Icon name="mail" :size="15" />
-                  {{ securityTestBusy ? t('发送中…') : t('发送测试邮件') }}
                 </button>
               </div>
             </template>

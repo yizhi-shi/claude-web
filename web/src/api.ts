@@ -132,6 +132,20 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  updateSecurityMail: (payload: {
+    host: string;
+    port: number;
+    security: 'ssl' | 'starttls';
+    user: string;
+    password?: string;
+    from: string;
+    fromName: string;
+    currentPassword: string;
+  }) =>
+    request<SecurityView>('/api/auth/security/mail', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   testSecurityEmail: (currentPassword: string) =>
     request<{ ok: boolean }>('/api/auth/security/test-email', {
       method: 'POST',

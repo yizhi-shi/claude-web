@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 — 2026-11-25
+
+- Email SMTP server settings are now editable in Settings → Administrator account → Email sign-in verification: host, port, SSL/STARTTLS, username, password, From address/name. The password is write-only, stored in `data/mail.json` (0600), and never returned by the API.
+- Saving SMTP settings sends a test email with the candidate configuration before writing it, so a broken server change cannot lock out the next email-code login. A blank password preserves the existing one; `MAIL_ENV_FILE` remains the fallback when no local mail settings exist.
+- SMTP test/save rate limits are separate from login-code limits, so saving settings does not block an immediate login.
+
 ## 0.11.0 — 2026-11-25
 
 - Optional email-code second factor for login. Configure SMTP through `MAIL_ENV_FILE` (0600), enable it under Settings → Administrator account → Email sign-in verification, and log in with password + a 6-digit code (10-minute TTL, five attempts, HMAC storage). `npm run disable-2fa` is the local break-glass path.

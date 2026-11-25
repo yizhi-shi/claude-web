@@ -150,7 +150,7 @@ journalctl --user -u claude-web -f
 2. 设置用户名（字母、数字、`.` `_` `@` `-`，1–64 位）和密码（至少 8 位），确认后创建。
 3. 创建成功会自动登录；密码只以 bcrypt 哈希保存在本机 `data/auth.json`（0600），不会写入 Git。
 4. 同一账号连续 5 次密码错误会锁定 1 小时；登录接口另有 IP 频率限制。
-5. 可在「设置 → 管理员账号 → 邮箱登录验证」开启邮箱验证码。开启前需要配置服务端 SMTP（见下方 `MAIL_ENV_FILE`）；开启后登录需要密码 + 邮箱验证码。SMTP 故障时可在服务器执行 `npm run disable-2fa` 临时关闭。
+5. 可在「设置 → 管理员账号 → 邮箱登录验证」配置 SMTP 服务器（host/port/SSL/用户名/密码/发件地址）并开启邮箱验证码。SMTP 密码只保存在服务端 `data/mail.json`（0600），接口不回显；也可以继续用 `MAIL_ENV_FILE` 作为回退配置。开启后登录需要密码 + 邮箱验证码。SMTP 故障时可在服务器执行 `npm run disable-2fa` 临时关闭。
 6. 忘记密码：在服务器执行
    ```bash
    npm run set-password -- <用户名> <新密码>
@@ -198,7 +198,7 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 | `ACCOUNT_LOCK_MINUTES` | `60` | 锁定分钟数 |
 | `CLAUDE_BIN` | `PATH` 中的 `claude` | CLI 绝对路径（systemd 环境建议显式设置） |
 | `TRUST_PROXY` | `true` | 反向代理下取真实客户端 IP |
-| `MAIL_ENV_FILE` | `./data/mail.env` | 可选 SMTP 凭据文件（`SMTP_HOST/PORT/SECURITY/USER/PASS`、`MAIL_FROM/MAIL_TO`）；用于邮箱验证码，文件权限应为 0600 |
+| `MAIL_ENV_FILE` | `./data/mail.env` | SMTP 凭据回退文件（`SMTP_HOST/PORT/SECURITY/USER/PASS`、`MAIL_FROM/MAIL_TO`）；设置页保存的 `data/mail.json` 优先。两个文件都应为 0600 |
 | `SESSION_DAYS` | `7` | 登录 Cookie 有效天数；开启邮箱验证后可缩短 |
 | `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`；公网 HTTPS 建议 `always` |
 | `VOICE_PROXY_URL` | 空 | 可选的语音 HTTP 出口代理（本地代理或公司网关），不配置则直连 |

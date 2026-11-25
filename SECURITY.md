@@ -30,7 +30,7 @@ Include:
 
 - First-run administrator setup; no default password.
 - bcrypt password hashes; HMAC-signed HttpOnly cookies; SameSite=Strict.
-- Optional email-code second factor for login. The code is 6 digits, expires after 10 minutes, allows five attempts and is stored only as an HMAC. SMTP credentials live in `MAIL_ENV_FILE` (0600); the Settings page stores only the recipient and the on/off switch.
+- Optional email-code second factor for login. The code is 6 digits, expires after 10 minutes, allows five attempts and is stored only as an HMAC. SMTP can be configured in Settings (saved to `data/mail.json`, 0600) or through `MAIL_ENV_FILE` (0600) as a fallback; the SMTP password is write-only and never returned by the API. Saving SMTP settings sends a test message with the candidate config before committing it.
 - Same-account lockout after 5 failures for 1 hour; the counter resets after a completed lock/idle window; IP login rate limiting.
 - All `/api/*` routes require the signed-in session token by default. Only health, sign-in/email verification, and image attachments are public; future routes fail closed.
 - The unauthenticated `/api/auth/status` response deliberately does not include the administrator username.

@@ -28,6 +28,7 @@ import {
   isEmailVerificationEnabled,
   resendLoginChallenge,
   sendSecurityTest,
+  updateMailSecuritySettings,
   updateSecurity,
   verifyLoginChallenge,
 } from './security.js';
@@ -319,6 +320,18 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     try {
       await sendSecurityTest(body?.currentPassword);
       return { ok: true };
+    } catch (error) {
+      return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+    }
+  });
+
+  authed(app, 'PUT', '/api/auth/security/mail', async (req, reply) => {
+    const body = req.body as Record<string, unknown> | undefined;
+    try {
+      return await updateMailSecuritySettings(
+        body ?? {},
+        body?.currentPassword,
+      );
     } catch (error) {
       return reply.code(statusOf(error)).send({ error: errorMessage(error) });
     }

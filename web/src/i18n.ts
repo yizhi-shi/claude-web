@@ -110,6 +110,15 @@ const SERVER_MESSAGES: Record<string, string> = {
   '测试邮件发送失败': 'Could not send the test email.',
   '邮件发送失败，请检查 SMTP 配置或稍后重试':
     'Could not send the email. Check the SMTP configuration or try again later.',
+  'SMTP 服务器地址无效': 'Invalid SMTP server address.',
+  'SMTP 端口无效': 'Invalid SMTP port.',
+  'SMTP 用户名不能为空': 'SMTP username cannot be empty.',
+  'SMTP 密码不能为空': 'SMTP password cannot be empty.',
+  '发件邮箱地址无效': 'Invalid sender email address.',
+  '邮件服务未配置，无法发送测试邮件': 'Mail is not configured; cannot send a test email.',
+  '请先填写接收验证码的邮箱地址': 'Enter the email address that receives codes first.',
+  'SMTP 设置已保存，测试邮件已发送': 'SMTP settings saved; a test email was sent.',
+  'SMTP 设置已保存': 'SMTP settings saved.',
 };
 
 const EN: Record<string, string> = {
@@ -191,6 +200,29 @@ const EN: Record<string, string> = {
   '请输入当前密码以发送测试邮件': 'Enter your current password to send a test email.',
   '测试邮件已发送，请检查收件箱': 'Test email sent. Check your inbox.',
   '测试邮件发送失败': 'Could not send the test email.',
+  'SMTP 邮件服务器': 'SMTP mail server',
+  '来自服务端环境配置': 'from server environment',
+  '来自本机设置': 'from local settings',
+  '未配置': 'not configured',
+  'SMTP 服务器': 'SMTP server',
+  '端口': 'Port',
+  '连接方式': 'Connection',
+  'SMTP 用户名': 'SMTP username',
+  'SMTP 密码': 'SMTP password',
+  '已保存，留空不修改': 'Saved; leave blank to keep',
+  '输入 SMTP 密码': 'Enter SMTP password',
+  '发件地址': 'From address',
+  '发件人名称': 'From name',
+  '保存 SMTP 设置时会先发送一封测试邮件；密码留空表示保持已保存密码。SMTP 密码只保存在服务端 data/mail.json（0600），不会回显。':
+    'Saving SMTP settings sends a test email first; leave the password blank to keep the saved one. The SMTP password is stored only in server-side data/mail.json (0600) and is never returned.',
+  '保存 SMTP 设置': 'Save SMTP settings',
+  'SMTP 尚未配置，暂时无法开启邮箱验证。请先填写并保存 SMTP 设置。':
+    'SMTP is not configured; email verification cannot be enabled. Fill in and save SMTP settings first.',
+  '请输入当前密码以保存 SMTP 设置': 'Enter your current password to save SMTP settings.',
+  '请填写 SMTP 服务器、用户名和发件地址': 'Fill in the SMTP server, username and From address.',
+  'SMTP 设置已保存，测试邮件已发送':
+    'SMTP settings saved; a test email was sent.',
+  '保存 SMTP 设置失败': 'Could not save SMTP settings.',
 
   // Shell
   '关闭菜单': 'Close menu',
