@@ -30,7 +30,8 @@ Claude Code Web moves the interaction layer into the browser while keeping the *
 
 | Feature | Problem it solves | Core implementation |
 |---|---|---|
-| First-run setup + login | Establish an access boundary before LAN/public use | Set the administrator on first launch; passwords are bcrypt-hashed in `data/auth.json`; HttpOnly + SameSite signed cookie; five consecutive failures lock the account for one hour, plus per-IP rate limiting |
+| First-run setup + login | Establish an access boundary before LAN/public use | Set the administrator on first launch; passwords are bcrypt-hashed in `data/auth.json`; HttpOnly + SameSite signed cookie; five consecutive failures lock the account for one hour, plus per-IP rate limiting; optional email-code second factor |
+| API authorization | Every data API must require a signed-in user | A global hook requires the login token for all `/api/*` routes except health, sign-in/email verification and image attachments; new routes fail closed by default |
 | Persistent sessions | Refreshing/closing the page must not kill the task | Each session has a server-side `ClaudeRuntime` that keeps the CLI process alive through the Agent SDK's streaming input; the browser WebSocket only subscribes to events and never owns the process |
 | Automatic recovery | Reopening the page should show a task that is still running | Events are persisted to `data/transcripts/<id>.jsonl`; reconnect replays from `lastSeq` and sends the current run state, active tools, pending approvals and background tasks |
 | Streaming conversation | Typewriter output and visible tool execution | SDK `includePartialMessages` yields text/thinking deltas, normalized into `assistant.delta` / `assistant.message` and pushed over WebSocket; the frontend renders Markdown and tool cards |
@@ -150,13 +151,14 @@ Acceptance: health returns ok, the service is active, port 8010 is listening, an
 2. Choose a username (letters, digits, `.` `_` `@` `-`, 1–64 characters) and a password (at least 8 characters), then confirm.
 3. Successful creation logs you in automatically. The password is stored only as a bcrypt hash in local `data/auth.json` (0600) and is never committed to Git.
 4. Five consecutive wrong passwords lock the account for one hour; the login endpoint also has per-IP rate limiting.
-5. Forgot your password? On the server, run:
+5. Enable email codes under Settings → Administrator account → Email sign-in verification. Configure SMTP first (see `MAIL_ENV_FILE`); after enabling, sign-in needs the password plus an email code. If SMTP breaks, run `npm run disable-2fa` on the server to disable it locally.
+6. Forgot your password? On the server, run:
    ```bash
    npm run set-password -- <username> <new-password>
    systemctl --user restart claude-web   # use systemctl restart claude-web for a system service
    ```
    Or change it after login under Settings → Administrator account.
-6. If you see the login page immediately, the instance is already initialized; reset the password with the previous step if you do not know it.
+7. If you see the login page immediately, the instance is already initialized; reset the password with the previous step if you do not know it.
 
 The default appearance (login page and new browsers) can be set to system/light/dark under Settings → Appearance; the current browser can still switch independently from the sidebar footer.
 
@@ -197,6 +199,9 @@ npm run dev:web      # Vite, :5173, proxies /api and /ws
 | `ACCOUNT_LOCK_MINUTES` | `60` | Lockout duration in minutes |
 | `CLAUDE_BIN` | `claude` on `PATH` | Absolute path to the CLI (recommended for systemd) |
 | `TRUST_PROXY` | `true` | Read the real client IP behind a reverse proxy |
+| `MAIL_ENV_FILE` | `./data/mail.env` | Optional SMTP credential file (`SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM/MAIL_TO`) used for email codes; keep it 0600 |
+| `SESSION_DAYS` | `7` | Login cookie lifetime in days; shorten it when email verification is enabled |
+| `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`; use `always` for public HTTPS |
 | `VOICE_PROXY_URL` | empty | Optional HTTP egress proxy for voice requests (local proxy or corporate gateway); direct when unset |
 | `GEMINI_LIVE_URL` | empty | Gemini Live WebSocket relay URL (requires a Google-supported region) |
 | `GEMINI_LIVE_PROXY_TOKEN` | empty | Internal auth token for the Live relay (optional, server-side only) |
@@ -231,7 +236,7 @@ The composer supports three ways to attach files: the Attach button, pasting ima
 - Small text files (≤64 KB, 128 KB total inline budget per message) → inlined into `text` blocks so the model can read them even if Read is denied;
 - Other files → the message includes an absolute path and Claude reads them on demand with the Read tool.
 
-Transcripts store only attachment `id/name/mimeType/size/kind`, never file bytes; after refresh, images replay through an authenticated attachment endpoint and non-images are forced to download. Limits are 5 attachments per message, 10 MB per file and 20 MB total by default, all configurable through environment variables. See [Attachment pipeline](docs/ATTACHMENTS.md) for the full flow, storage format, security boundaries and limits.
+Transcripts store only attachment `id/name/mimeType/size/kind`, never file bytes; after refresh, images replay through a public random capability URL (no login) while non-images still require the login cookie and are forced to download. Limits are 5 attachments per message, 10 MB per file and 20 MB total by default, all configurable through environment variables. See [Attachment pipeline](docs/ATTACHMENTS.md) for the full flow, storage format, security boundaries and limits.
 
 ### Native Web commands
 

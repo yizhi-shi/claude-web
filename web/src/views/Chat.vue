@@ -1297,7 +1297,14 @@ async function loadExtensions(): Promise<void> {
     if (sessionId.value === target) extensionsView.value = view;
   } catch (err) {
     if (sessionId.value === target) {
-      extensionsError.value = err instanceof ApiError ? translateServerMessage(err.message) : t('读取扩展失败');
+      if (err instanceof ApiError && err.status === 404) {
+        // 服务端进程可能还是旧构建（路由未注册）。此时不能说“会话未运行”，
+        // 否则用户会误以为需要发消息；实际需要重启 claude-web 服务。
+        extensionsView.value = null;
+        extensionsError.value = t('扩展接口不可用：服务端版本过旧或尚未重启，请重启 claude-web 服务后再试。');
+      } else {
+        extensionsError.value = err instanceof ApiError ? translateServerMessage(err.message) : t('读取扩展失败');
+      }
     }
   } finally {
     extensionsLoading.value = false;
@@ -2320,7 +2327,7 @@ onUnmounted(() => {
               插件市场、hooks 与 MCP 认证仍由 Claude Code CLI 管理；Web 端不会修改配置文件。
             </p>
           </template>
-          <p v-else-if="!extensionsLoading" class="popover-note">
+          <p v-else-if="!extensionsLoading && !extensionsError" class="popover-note">
             会话尚未运行，发送一条消息或重新打开页面后再查看扩展。
           </p>
         </template>

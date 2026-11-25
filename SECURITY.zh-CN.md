@@ -30,13 +30,16 @@ Claude Code Web 以服务运行用户的身份运行本机 `claude` CLI。任何
 
 - 首次运行初始化管理员；没有默认密码。
 - bcrypt 密码哈希；HMAC 签名的 HttpOnly Cookie；SameSite=Strict。
-- 同一账号连续 5 次失败锁定 1 小时；登录接口按 IP 限流。
+- 可选邮箱验证码作为登录第二因素。验证码为 6 位，10 分钟过期，最多尝试 5 次，仅保存 HMAC；SMTP 凭据放在 `MAIL_ENV_FILE`（0600），设置页只保存收件地址和开关。
+- 同一账号连续 5 次失败锁定 1 小时；锁定期结束/空闲窗口后计数重置；登录接口按 IP 限流。
+- 所有 `/api/*` 默认要求登录后的会话 Token；只有健康检查、登录/邮箱验证和图片附件是公开的，新增接口默认拒绝未登录访问。
+- 未登录的 `/api/auth/status` 不再返回管理员用户名。
 - 对改变状态的请求和 WebSocket 握手做 Origin 校验。
 - CSP、禁止 iframe 嵌入、nosniff 和 no-referrer 响应头。
-- 工作区访问使用 realpath 校验的路径白名单。
+- 工作区访问使用 realpath 校验的路径白名单；从 Claude 历史导入的会话也校验 cwd，启动运行时再次校验。
 - 权限审批超时和明确的停止语义。
 - 语音 Key 在 API 响应中只返回掩码，且只存储在服务端。
-- 附件保存在 `data/attachments/<sessionId>/`，使用服务端生成的随机文件名和 `0600` 权限；上传和下载都要求会话 Cookie，附件 id 绑定所属会话。绝不使用客户端提供的路径。
+- 附件保存在 `data/attachments/<sessionId>/`，使用服务端生成的随机文件名和 `0600` 权限；附件 id 绑定所属会话，绝不使用客户端提供的路径。图片附件是刻意公开的 capability URL（随机会话 id + 随机附件 id）用于内联渲染；非图片附件仍要求会话 Token。
 - 附件上传在服务端强制执行严格的 base64 解码、MIME 语法检查、显示名 basename/清洗、生成磁盘文件名，以及单文件/数量/总大小限制。附属元数据在每次读取时都会重新校验。
 - 只有 PNG/JPEG/GIF/WebP 会被当作图片（刻意排除 SVG）。非图片文件强制使用 `application/octet-stream` + `Content-Disposition: attachment`；图片使用内联 disposition 和白名单 MIME。CSP + `nosniff` 进一步降低同源脚本执行风险。
 - Fastify 请求体上限为 18 MB；base64 膨胀后附件限制应保持在其之下。反向代理必须配置兼容的 `client_max_body_size`。

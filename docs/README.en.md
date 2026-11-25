@@ -28,7 +28,7 @@ End-to-end flow from browser upload to Claude Code: attachment button/paste/drag
 
 ### [Extension management scope](EXTENSIONS.md) (Chinese)
 
-Why the Web UI manages MCP status, reconnect and session-scoped enable/disable, and shows subagents read-only, while deliberately skipping plugin marketplace/install, hooks editing, and MCP add/edit/auth. Includes the decision matrix, APIs, security allowlist and verification.
+Why the Web UI manages MCP status, reconnect and session-scoped enable/disable, and shows subagents read-only, while deliberately skipping plugin marketplace/install, hooks editing, and MCP add/edit/auth. Includes the decision matrix, APIs, security allowlist and verification; a stale server that lacks the extensions route is reported as a restart hint instead of "session not running".
 
 ### [Deployment guide](DEPLOYMENT.md) (Chinese)
 

@@ -51,6 +51,7 @@ const paths: Record<string, string> = {
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   gitBranch: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a9 9 0 0 1-9 9',
   key: 'M21 2l-2 2M15 8l-3 3M13 7l4 4M7 21a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM10.5 14.5 15 10',
+  mail: 'M4 4h16v16H4zM4 6l8 6 8-6',
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6',
   save: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2ZM7 3v6h8V3M7 21v-7h10v7',
   volume: 'M11 5 6 9H2v6h4l5 4V5ZM19 9a5 5 0 0 1 0 6M22 6a9 9 0 0 1 0 12',

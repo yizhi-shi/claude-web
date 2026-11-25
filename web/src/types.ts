@@ -30,6 +30,28 @@ export interface AttachmentRef {
   kind: 'image' | 'file';
 }
 
+export interface EmailChallenge {
+  challengeId: string;
+  emailHint: string;
+  expiresAt: number;
+  resendAfterMs: number;
+}
+
+export interface LoginResponse {
+  user?: { username: string };
+  twoFactorRequired?: boolean;
+  challengeId?: string;
+  emailHint?: string;
+  expiresAt?: number;
+  resendAfterMs?: number;
+}
+
+export interface SecurityView {
+  email: string;
+  emailVerificationEnabled: boolean;
+  emailConfigured: boolean;
+}
+
 export interface TaskView {
   id: string;
   description: string;

@@ -153,6 +153,16 @@ export function getUsername(): string {
   return authFile?.username ?? '';
 }
 
+/** Derive a server-secret HMAC for short-lived security challenges. */
+export function hmacHex(value: string): string {
+  return crypto.createHmac('sha256', secret).update(value).digest('hex');
+}
+
+export async function verifyCurrentPassword(password: string): Promise<boolean> {
+  if (!authFile || typeof password !== 'string' || !password) return false;
+  return bcrypt.compare(password, authFile.passwordHash);
+}
+
 export async function changePassword(current: string, next: string): Promise<void> {
   if (!authFile) throw new Error('auth is not initialized');
   const ok = await bcrypt.compare(current, authFile.passwordHash);
@@ -237,6 +247,13 @@ export function recordLoginFailure(ip: string, username: string): number {
     return 0;
   }
   if (account.lockedUntil > now) return account.lockedUntil - now;
+  // A completed lock (or an idle window) starts a fresh failure budget. Without
+  // this reset one wrong password after expiry would immediately lock again,
+  // which lets an unauthenticated attacker keep the only admin locked out.
+  if (account.lockedUntil > 0 || now - account.lastFailure > config.accountLockMs) {
+    account.count = 0;
+    account.lockedUntil = 0;
+  }
   account.count += 1;
   account.lastFailure = now;
   if (account.count >= config.accountLockAttempts) {

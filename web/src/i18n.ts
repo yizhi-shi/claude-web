@@ -63,6 +63,8 @@ export function translateServerMessage(message: string): string {
     [/^尝试次数过多，请稍后再试$/, () => 'Too many attempts. Try again later.'],
     [/^未登录或会话已过期$/, () => 'Not signed in or session expired.'],
     [/^账号或密码错误$/, () => 'Incorrect username or password.'],
+    [/^请 (\d+) 秒后再试$/, (m) => `Try again in ${m[1]} second(s).`],
+    [/^邮箱验证码不正确，还可尝试 (\d+) 次$/, (m) => `Incorrect email code. ${m[1]} attempt(s) left.`],
   ];
   for (const [pattern, render] of patterns) {
     const match = message.match(pattern);
@@ -89,6 +91,25 @@ const SERVER_MESSAGES: Record<string, string> = {
   '审批请求已失效': 'This approval request has expired.',
   '问题请求已失效': 'This question has expired.',
   '计划请求已失效': 'This plan request has expired.',
+  '当前密码不正确': 'Current password is incorrect.',
+  '邮箱地址无效': 'Invalid email address.',
+  '收件邮箱地址无效': 'Invalid recipient email address.',
+  '请输入 6 位邮箱验证码': 'Enter the 6-digit email code.',
+  '邮箱验证未开启': 'Email verification is not enabled.',
+  '邮箱验证缺少收件地址': 'Email verification has no recipient address.',
+  '邮件服务未配置，无法登录': 'Mail is not configured; sign-in is unavailable.',
+  '邮件服务未配置，无法发送邮箱验证码': 'Mail is not configured; cannot send an email code.',
+  '服务端未配置 SMTP': 'SMTP is not configured on the server.',
+  '服务端未配置 SMTP，暂时无法开启邮箱验证': 'SMTP is not configured; email verification cannot be enabled yet.',
+  '邮箱验证通知发送失败，设置未保存': 'Could not send the notification; settings were not saved.',
+  '验证码发送失败，请稍后重试': 'Could not send the code. Try again shortly.',
+  '验证码已失效，请重新登录': 'The code expired. Sign in again.',
+  '验证码错误次数过多，请重新登录': 'Too many wrong codes. Sign in again.',
+  '验证码发送过于频繁，请稍后再试': 'Codes are being requested too often. Try again later.',
+  '缺少验证请求 ID': 'Missing verification request ID.',
+  '测试邮件发送失败': 'Could not send the test email.',
+  '邮件发送失败，请检查 SMTP 配置或稍后重试':
+    'Could not send the email. Check the SMTP configuration or try again later.',
 };
 
 const EN: Record<string, string> = {
@@ -133,6 +154,43 @@ const EN: Record<string, string> = {
   '切换语言': 'Switch language',
   'English': 'English',
   '中文': '中文',
+  '邮箱验证': 'Email verification',
+  '验证码已发送到 {email}': 'A code was sent to {email}',
+  '邮箱验证码': 'Email code',
+  '输入 6 位验证码': 'Enter the 6-digit code',
+  '验证中…': 'Verifying…',
+  '验证并登录': 'Verify and sign in',
+  '重新发送（{n} 秒）': 'Resend in {n}s',
+  '重新发送验证码': 'Resend code',
+  '发送中…': 'Sending…',
+  '返回密码登录': 'Back to password',
+  '验证码 10 分钟内有效，只能使用一次；没收到请检查垃圾邮件。':
+    'The code is valid for 10 minutes and can be used once. Check spam if it does not arrive.',
+  '验证失败，请重试': 'Verification failed. Try again.',
+  '发送失败，请重试': 'Could not send. Try again.',
+  '邮箱登录验证': 'Email sign-in verification',
+  '开启后，登录需要先输入密码，再输入发送到邮箱的 6 位验证码。':
+    'When enabled, sign-in requires the password plus a 6-digit code sent to your email.',
+  '读取安全设置…': 'Loading security settings…',
+  '启用邮箱验证码': 'Enable email code',
+  '已开启': 'On',
+  '已关闭': 'Off',
+  '接收验证码的邮箱': 'Email address for codes',
+  '当前密码（修改安全设置时确认）': 'Current password (confirm changes)',
+  '服务端尚未配置 SMTP，暂时无法开启邮箱验证。请配置 MAIL_ENV_FILE。':
+    'SMTP is not configured; email verification cannot be enabled. Configure MAIL_ENV_FILE.',
+  '保存邮箱验证': 'Save email verification',
+  '发送测试邮件': 'Send test email',
+  '读取邮箱验证设置失败': 'Could not load email verification settings.',
+  '请输入当前密码以修改安全设置': 'Enter your current password to change security settings.',
+  '开启邮箱验证前请填写邮箱地址': 'Enter an email address before enabling email verification.',
+  '邮箱验证已开启，下次登录需要验证码':
+    'Email verification is on. The next sign-in requires a code.',
+  '邮箱验证已关闭': 'Email verification is off.',
+  '保存邮箱验证设置失败': 'Could not save email verification settings.',
+  '请输入当前密码以发送测试邮件': 'Enter your current password to send a test email.',
+  '测试邮件已发送，请检查收件箱': 'Test email sent. Check your inbox.',
+  '测试邮件发送失败': 'Could not send the test email.',
 
   // Shell
   '关闭菜单': 'Close menu',
@@ -528,6 +586,7 @@ const EN: Record<string, string> = {
   "读取": "Read",
   "读取上下文用量失败": "Failed to read context usage",
   "读取扩展失败": "Failed to load extensions",
+  "扩展接口不可用：服务端版本过旧或尚未重启，请重启 claude-web 服务后再试。": "The extensions API is unavailable: the server may be outdated or not restarted. Restart the claude-web service and try again.",
   "读取文件失败": "Failed to read file",
   "读取语音配置失败": "Failed to read voice configuration",
   "读取配置…": "Reading configuration…",

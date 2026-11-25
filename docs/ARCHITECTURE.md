@@ -29,7 +29,8 @@
 
 data/
   auth.json          bcrypt 管理员
-  session.secret     Cookie HMAC
+  session.secret     Cookie/邮件验证码 HMAC
+  security.json      邮箱验证收件地址与开关（0600）
   workspaces.json    默认/额外工作区
   preferences.json   默认外观（system/dark/light）
   sessions.json      Web 会话索引
@@ -50,6 +51,8 @@ data/
 | `server/src/importHistory.ts` | Claude 原始 transcript → Web UI 事件；按 messageId 合并 chunk |
 | `server/src/ws.ts` | WebSocket 附着、快照 + 增量回放、审批与中断 |
 | `server/src/auth.ts` | 首次初始化、登录、Cookie、账号锁定 |
+| `server/src/security.ts` | 邮箱验证开关、短期挑战码、发送/验证限流 |
+| `server/src/mail.ts` | SMTP 配置读取与验证码邮件发送（`MAIL_ENV_FILE`） |
 | `server/src/workspaces.ts` | 允许目录/默认目录的持久化与校验 |
 | `server/src/voice.ts` | 语音渠道注册、整段转写、实时渠道配置与可用性 |
 | `server/src/voiceLive.ts` | Gemini Live、OpenAI Realtime/分段、火山引擎流式会话 |

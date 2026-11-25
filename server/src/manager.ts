@@ -9,6 +9,7 @@ import {
 } from './claudeHistory.js';
 import { convertClaudeTranscript, summarizeForTitle } from './importHistory.js';
 import { allRoots } from './workspaces.js';
+import { validateCwd } from './paths.js';
 import { ClaudeRuntime } from './runtime.js';
 import { SessionIndex } from './sessionIndex.js';
 import {
@@ -127,10 +128,14 @@ export class SessionManager {
     if (!meta) {
       const claude = await findClaudeSession(id);
       if (!claude) throw new HttpError(404, '会话不存在');
+      // Imported Claude sessions must obey the same workspace allowlist as
+      // sessions created by the Web UI. Without this check a known session id
+      // could start a runtime in an arbitrary directory outside ALLOWED_ROOTS.
+      const cwd = validateCwd(claude.cwd || '/');
       meta = {
         id,
         claudeSessionId: id,
-        cwd: claude.cwd || '/',
+        cwd,
         title: claude.title,
         model: claude.model,
         permissionMode: 'default',
@@ -173,9 +178,12 @@ export class SessionManager {
 
   private async createRuntime(id: string): Promise<ClaudeRuntime> {
     const meta = await this.ensureTranscript(id);
+    // Existing index entries may predate a tightened ALLOWED_ROOTS; never
+    // launch a runtime outside the current allowlist.
+    const cwd = validateCwd(meta.cwd);
     const runtime = new ClaudeRuntime({
       wid: id,
-      cwd: meta.cwd,
+      cwd,
       claudeSessionId: meta.claudeSessionId,
       permissionMode: meta.permissionMode,
       model: meta.model,

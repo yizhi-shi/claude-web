@@ -10,6 +10,7 @@ import { initAuth } from './auth.js';
 import { config, ensureDataDirs, loadClaudeSettingsEnv } from './config.js';
 import { registerHttp } from './http.js';
 import { SessionManager } from './manager.js';
+import { initSecurity } from './security.js';
 import { SessionIndex } from './sessionIndex.js';
 import { TranscriptStore } from './transcript.js';
 import { registerVoiceWs } from './voiceWs.js';
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
   loadClaudeSettingsEnv();
   ensureDataDirs();
   initAuth();
+  initSecurity();
 
   const app = Fastify({
     logger: { level: config.logLevel },

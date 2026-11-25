@@ -131,3 +131,7 @@ POST /api/sessions/:id/mcp/reconnect   { name }
 - 插件市场、hooks、output style、statusline、终端/IDE 命令不做 Web 管理；
 - `/doctor` 等诊断命令仍走 CLI，输出会作为系统消息显示；
 - 扩展面板依赖运行时已启动；会话未运行时会提示先发送消息/重新打开。
+- 服务端进程若仍是旧构建（前端已更新但 `/api/sessions/:id/extensions` 路由未注册），
+  接口会返回 404；Web 会明确提示「扩展接口不可用：服务端版本过旧或尚未重启，请重启
+  claude-web 服务后再试」，不会再误报成「会话尚未运行」。构建后需重启服务，旧进程不会
+  自动加载新路由。

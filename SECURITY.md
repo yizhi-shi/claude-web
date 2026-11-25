@@ -30,13 +30,16 @@ Include:
 
 - First-run administrator setup; no default password.
 - bcrypt password hashes; HMAC-signed HttpOnly cookies; SameSite=Strict.
-- Same-account lockout after 5 failures for 1 hour; IP login rate limiting.
+- Optional email-code second factor for login. The code is 6 digits, expires after 10 minutes, allows five attempts and is stored only as an HMAC. SMTP credentials live in `MAIL_ENV_FILE` (0600); the Settings page stores only the recipient and the on/off switch.
+- Same-account lockout after 5 failures for 1 hour; the counter resets after a completed lock/idle window; IP login rate limiting.
+- All `/api/*` routes require the signed-in session token by default. Only health, sign-in/email verification, and image attachments are public; future routes fail closed.
+- The unauthenticated `/api/auth/status` response deliberately does not include the administrator username.
 - Origin checks on state-changing requests and WebSocket handshakes.
 - CSP, frame denial, nosniff and no-referrer headers.
-- Path allowlist with realpath validation for workspace access.
+- Path allowlist with realpath validation for workspace access, including sessions imported from Claude history; runtime startup re-validates the cwd.
 - Permission timeout and explicit stop semantics.
 - Voice keys are masked in API responses and stored server-side only.
-- Attachments are stored under `data/attachments/<sessionId>/` with server-generated random names and `0600` permissions; upload/download both require the session cookie and attachment ids are scoped to their session. Client-supplied paths are never used.
+- Attachments are stored under `data/attachments/<sessionId>/` with server-generated random names and `0600` permissions; ids are scoped to their session and client-supplied paths are never used. Image attachments are intentionally public capability URLs (random session id + random attachment id) for inline rendering; non-image attachments still require the session token.
 - Attachment uploads enforce strict base64 decoding, a MIME syntax check, a display-name basename/sanitization pass, generated disk names, and per-file/count/total size limits server-side. Sidecar metadata is re-validated on every read.
 - Only PNG/JPEG/GIF/WebP are treated as images (SVG is deliberately excluded). Non-image files are forced to `application/octet-stream` + `Content-Disposition: attachment`; images use inline disposition with a whitelisted MIME. CSP + `nosniff` further reduce same-origin script execution risk.
 - The Fastify request body limit is 18 MB; attachment limits should be kept below it after base64 expansion. Reverse proxies must set a compatible `client_max_body_size`.

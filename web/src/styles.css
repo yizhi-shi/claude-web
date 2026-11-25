@@ -659,6 +659,13 @@ pre {
   margin-top: 2px;
 }
 
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .auth-note {
   margin: 2px 0 0;
   color: var(--faint);
@@ -3812,6 +3819,36 @@ pre {
   padding-top: 13px;
   border-top: 1px solid var(--border);
 }
+
+.email-2fa {
+  margin-top: 4px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.check-row .mini-label {
+  margin-left: auto;
+}
+
+.security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 
 .version-grid {
   display: grid;

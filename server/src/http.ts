@@ -22,6 +22,15 @@ import { config } from './config.js';
 import { SessionManager } from './manager.js';
 import { createWorkspaceDir, listDirectory, searchFiles, validateCwd } from './paths.js';
 import { getThemePreference, setThemePreference } from './preferences.js';
+import {
+  beginLoginChallenge,
+  getSecurityView,
+  isEmailVerificationEnabled,
+  resendLoginChallenge,
+  sendSecurityTest,
+  updateSecurity,
+  verifyLoginChallenge,
+} from './security.js';
 import { updateWorkspaces, workspaceConfig } from './workspaces.js';
 import type { PermissionDecision } from './types.js';
 import { errorMessage, HttpError } from './util.js';
@@ -86,6 +95,27 @@ function intParam(value: unknown, fallback: number, min: number, max: number): n
   return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
+const PUBLIC_API = new Set([
+  '/api/health',
+  '/api/auth/status',
+  '/api/auth/setup',
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/verify-email',
+  '/api/auth/resend-email',
+]);
+const PUBLIC_ATTACHMENT_RE = /^\/api\/sessions\/[^/]+\/attachments\/[^/]+\/?$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function requestPath(url: string): string {
+  const index = url.indexOf('?');
+  return index >= 0 ? url.slice(0, index) : url;
+}
+
+function isPublicAttachmentRequest(req: FastifyRequest): boolean {
+  return req.method === 'GET' && PUBLIC_ATTACHMENT_RE.test(requestPath(req.url));
+}
+
 export function registerHttp(app: FastifyInstance, manager: SessionManager): void {
   app.addHook('onRequest', async (req, reply) => {
     const origin = req.headers.origin;
@@ -98,6 +128,18 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
       } catch {
         return reply.code(403).send({ error: '非法来源' });
       }
+    }
+    return undefined;
+  });
+
+  // Fail closed for every API route. Public endpoints must be explicitly listed
+  // here; future routes are authenticated by default.
+  app.addHook('onRequest', async (req, reply) => {
+    if (!req.url.startsWith('/api/')) return undefined;
+    const path = requestPath(req.url);
+    if (PUBLIC_API.has(path) || isPublicAttachmentRequest(req)) return undefined;
+    if (!authenticate(req)) {
+      return reply.code(401).send({ error: '未登录或会话已过期' });
     }
     return undefined;
   });
@@ -127,7 +169,6 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
 
   app.get('/api/auth/status', async () => ({
     setupRequired: isSetupRequired(),
-    username: isSetupRequired() ? '' : getUsername(),
     defaultTheme: getThemePreference(),
   }));
 
@@ -191,10 +232,48 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
       }
       return reply.code(401).send({ error: '账号或密码错误' });
     }
+    if (isEmailVerificationEnabled()) {
+      try {
+        const challenge = await beginLoginChallenge(username);
+        audit('login.email_challenge', { username }, ip);
+        return { twoFactorRequired: true, ...challenge };
+      } catch (error) {
+        return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+      }
+    }
     clearLoginFailures(ip, username);
     issueSessionCookie(req, reply);
     audit('login.success', { username: getUsername() }, ip);
     return { user: { username: getUsername() } };
+  });
+
+  app.post('/api/auth/verify-email', async (req, reply) => {
+    const body = req.body as { challengeId?: unknown; code?: unknown } | undefined;
+    const challengeId = typeof body?.challengeId === 'string' ? body.challengeId : '';
+    const code = typeof body?.code === 'string' ? body.code : '';
+    if (!challengeId || !/^\d{6}$/.test(code)) {
+      return reply.code(400).send({ error: '请输入 6 位邮箱验证码' });
+    }
+    try {
+      const verified = await verifyLoginChallenge(challengeId, code);
+      clearLoginFailures(req.ip, verified.username);
+      issueSessionCookie(req, reply);
+      audit('login.success', { username: verified.username, via: 'email' }, req.ip);
+      return { user: { username: verified.username } };
+    } catch (error) {
+      return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post('/api/auth/resend-email', async (req, reply) => {
+    const body = req.body as { challengeId?: unknown } | undefined;
+    const challengeId = typeof body?.challengeId === 'string' ? body.challengeId : '';
+    if (!challengeId) return reply.code(400).send({ error: '缺少验证请求 ID' });
+    try {
+      return await resendLoginChallenge(challengeId);
+    } catch (error) {
+      return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+    }
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
@@ -220,6 +299,29 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     issueSessionCookie(req, reply);
     audit('password.changed', { username: user.username }, req.ip);
     return { ok: true };
+  });
+
+  authed(app, 'GET', '/api/auth/security', async () => getSecurityView());
+
+  authed(app, 'PUT', '/api/auth/security', async (req, reply) => {
+    const body = req.body as
+      | { enabled?: unknown; email?: unknown; currentPassword?: unknown }
+      | undefined;
+    try {
+      return await updateSecurity(body ?? {});
+    } catch (error) {
+      return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+    }
+  });
+
+  authed(app, 'POST', '/api/auth/security/test-email', async (req, reply) => {
+    const body = req.body as { currentPassword?: unknown } | undefined;
+    try {
+      await sendSecurityTest(body?.currentPassword);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(statusOf(error)).send({ error: errorMessage(error) });
+    }
   });
 
   authed(app, 'GET', '/api/config', async () => {
@@ -514,14 +616,26 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     return { attachment };
   });
 
-  authed(app, 'GET', '/api/sessions/:id/attachments/:attachmentId', async (req, reply) => {
+  // Image attachments are intentionally public capability URLs (random session
+  // id + random attachment id). Non-image files still require the login token.
+  app.get('/api/sessions/:id/attachments/:attachmentId', async (req, reply) => {
     const { id, attachmentId } = req.params as { id: string; attachmentId: string };
-    await manager.ensureTranscript(id);
+    if (!SESSION_ID_RE.test(id)) {
+      return reply.code(404).send({ error: '附件不存在' });
+    }
+    if (!manager.index.get(id) && !manager.transcript.exists(id)) {
+      return reply.code(404).send({ error: '附件不存在' });
+    }
     const { meta, file, size } = manager.attachments.read(id, attachmentId);
+    const user = authenticate(req);
+    if (!user && meta.kind !== 'image') {
+      return reply.code(401).send({ error: '未登录或会话已过期' });
+    }
     reply.header('Content-Type', meta.kind === 'image' ? meta.mimeType : 'application/octet-stream');
     reply.header('Content-Disposition', contentDisposition(meta.kind, meta.name));
     reply.header('Content-Length', String(size));
-    reply.header('Cache-Control', 'private, max-age=31536000, immutable');
+    reply.header('Cache-Control', 'private, max-age=86400');
+    if (!user) reply.header('X-Robots-Tag', 'noindex, nofollow');
     return reply.send(fs.createReadStream(file));
   });
 

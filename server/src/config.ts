@@ -13,6 +13,7 @@ function envNumber(value: string | undefined, fallback: number): number {
 }
 
 const appRoot = process.cwd();
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(appRoot, 'data'));
 
 const PERMISSION_MODES = new Set([
   'default',
@@ -32,8 +33,9 @@ export const config = {
   appRoot,
   host: process.env.HOST || '0.0.0.0',
   port: envNumber(process.env.PORT, 8010),
-  dataDir: path.resolve(process.env.DATA_DIR || path.join(appRoot, 'data')),
+  dataDir,
   webDist: path.resolve(process.env.WEB_DIST || path.join(appRoot, 'web', 'dist')),
+  mailEnvFile: path.resolve(process.env.MAIL_ENV_FILE || path.join(dataDir, 'mail.env')),
   allowedRootsRaw: (process.env.ALLOWED_ROOTS || os.homedir())
     .split(',')
     .map((s) => s.trim())
@@ -114,6 +116,6 @@ export function childEnv(): Record<string, string> {
     if (value === undefined || drop.has(key)) continue;
     env[key] = value;
   }
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.10.1';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.11.0';
   return env;
 }

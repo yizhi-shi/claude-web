@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError, api } from '../api';
 import Icon from '../components/Icon.vue';
@@ -19,9 +19,27 @@ const showPassword = ref(false);
 const busy = ref(false);
 const error = ref('');
 
+const step = ref<'credentials' | 'email'>('credentials');
+const challengeId = ref('');
+const emailHint = ref('');
+const code = ref('');
+const resendAt = ref(0);
+const now = ref(Date.now());
+const codeBusy = ref(false);
+const resendBusy = ref(false);
+let clockTimer: number | undefined;
+
+const resendLeft = computed(() => Math.max(0, Math.ceil((resendAt.value - now.value) / 1000)));
+
 function redirectTarget(): string {
   const value = route.query.redirect;
   return typeof value === 'string' && value.startsWith('/') ? value : '/';
+}
+
+async function finishLogin(): Promise<void> {
+  await ensureAuth(true);
+  await loadConfig(true);
+  await router.replace(redirectTarget());
 }
 
 async function loadStatus(): Promise<void> {
@@ -31,7 +49,6 @@ async function loadStatus(): Promise<void> {
     const status = await api.authStatus();
     initTheme(status.defaultTheme);
     setup.value = status.setupRequired;
-    if (!status.setupRequired && status.username) username.value = status.username;
     if (authState.checked && authState.user) {
       await router.replace(redirectTarget());
     }
@@ -63,12 +80,20 @@ async function submit(): Promise<void> {
   try {
     if (setup.value) {
       await api.setup(username.value.trim(), password.value);
-    } else {
-      await api.login(username.value.trim(), password.value);
+      await finishLogin();
+      return;
     }
-    await ensureAuth(true);
-    await loadConfig(true);
-    await router.replace(redirectTarget());
+    const result = await api.login(username.value.trim(), password.value);
+    if (result.twoFactorRequired) {
+      if (!result.challengeId) throw new Error('missing challenge');
+      step.value = 'email';
+      challengeId.value = result.challengeId;
+      emailHint.value = result.emailHint ?? '';
+      code.value = '';
+      resendAt.value = Date.now() + (result.resendAfterMs ?? 60_000);
+      return;
+    }
+    await finishLogin();
   } catch (err) {
     if (err instanceof ApiError) {
       error.value = translateServerMessage(err.message);
@@ -81,13 +106,59 @@ async function submit(): Promise<void> {
   }
 }
 
+async function verifyCode(): Promise<void> {
+  if (codeBusy.value) return;
+  error.value = '';
+  if (!/^\d{6}$/.test(code.value.trim())) {
+    error.value = t('请输入 6 位邮箱验证码');
+    return;
+  }
+  codeBusy.value = true;
+  try {
+    await api.verifyEmail(challengeId.value, code.value.trim());
+    await finishLogin();
+  } catch (err) {
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('验证失败，请重试');
+  } finally {
+    codeBusy.value = false;
+  }
+}
+
+async function resendCode(): Promise<void> {
+  if (resendBusy.value || resendLeft.value > 0) return;
+  error.value = '';
+  resendBusy.value = true;
+  try {
+    const result = await api.resendEmail(challengeId.value);
+    emailHint.value = result.emailHint;
+    resendAt.value = Date.now() + result.resendAfterMs;
+  } catch (err) {
+    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('发送失败，请重试');
+  } finally {
+    resendBusy.value = false;
+  }
+}
+
+function backToPassword(): void {
+  step.value = 'credentials';
+  challengeId.value = '';
+  code.value = '';
+  password.value = '';
+  error.value = '';
+}
+
 onMounted(async () => {
+  clockTimer = window.setInterval(() => (now.value = Date.now()), 1000);
   const authed = await ensureAuth();
   if (authed) {
     await router.replace(redirectTarget());
     return;
   }
   await loadStatus();
+});
+
+onUnmounted(() => {
+  if (clockTimer) window.clearInterval(clockTimer);
 });
 </script>
 
@@ -139,12 +210,18 @@ onMounted(async () => {
         </div>
 
         <template v-if="statusLoaded">
-          <h2>{{ setup ? t('初始化管理员') : t('登录控制台') }}</h2>
+          <h2>{{ step === 'email' ? t('邮箱验证') : setup ? t('初始化管理员') : t('登录控制台') }}</h2>
           <p class="auth-sub">
-            {{ setup ? t('首次使用，请设置管理员账号。') : t('使用你的管理员账号继续。') }}
+            {{
+              step === 'email'
+                ? t('验证码已发送到 {email}', { email: emailHint })
+                : setup
+                  ? t('首次使用，请设置管理员账号。')
+                  : t('使用你的管理员账号继续。')
+            }}
           </p>
 
-          <form class="auth-form" @submit.prevent="submit">
+          <form v-if="step === 'credentials'" class="auth-form" @submit.prevent="submit">
             <label class="field">
               <span>{{ t('账号') }}</span>
               <input
@@ -197,7 +274,54 @@ onMounted(async () => {
             </button>
           </form>
 
-          <p v-if="setup" class="auth-note">
+          <form v-else class="auth-form" @submit.prevent="verifyCode">
+            <label class="field">
+              <span>{{ t('邮箱验证码') }}</span>
+              <input
+                v-model="code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                pattern="[0-9]*"
+                :placeholder="t('输入 6 位验证码')"
+                :disabled="codeBusy"
+                autofocus
+              />
+            </label>
+
+            <p v-if="error" class="form-error"><Icon name="alert" :size="15" />{{ error }}</p>
+
+            <button class="btn primary block auth-submit" type="submit" :disabled="codeBusy">
+              {{ codeBusy ? t('验证中…') : t('验证并登录') }}
+              <Icon v-if="!codeBusy" name="chevronRight" :size="16" />
+            </button>
+
+            <div class="auth-actions">
+              <button
+                type="button"
+                class="btn ghost small"
+                :disabled="resendBusy || resendLeft > 0"
+                @click="resendCode"
+              >
+                {{
+                  resendLeft > 0
+                    ? t('重新发送（{n} 秒）', { n: resendLeft })
+                    : resendBusy
+                      ? t('发送中…')
+                      : t('重新发送验证码')
+                }}
+              </button>
+              <button type="button" class="btn ghost small" @click="backToPassword">
+                {{ t('返回密码登录') }}
+              </button>
+            </div>
+          </form>
+
+          <p v-if="step === 'email'" class="auth-note">
+            {{ t('验证码 10 分钟内有效，只能使用一次；没收到请检查垃圾邮件。') }}
+          </p>
+          <p v-else-if="setup" class="auth-note">
             {{ t('账号只保存在本机') }} <code>data/auth.json</code>{{ t('（bcrypt 哈希），不会进入 Git 仓库。') }}
           </p>
           <p v-else class="auth-note">{{ t('连续 5 次密码错误会锁定该账号 1 小时。') }}</p>

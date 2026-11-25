@@ -30,7 +30,8 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 
 | 功能 | 解决的需求 | 实现原理（核心） |
 |---|---|---|
-| 首次初始化 + 登录 | 公网/局域网使用前先建立访问边界 | 首次打开设置管理员；密码用 bcrypt 存 `data/auth.json`；HttpOnly + SameSite 签名 Cookie；同账号连续 5 次错误锁定 1 小时，另按 IP 限流 |
+| 首次初始化 + 登录 | 公网/局域网使用前先建立访问边界 | 首次打开设置管理员；密码用 bcrypt 存 `data/auth.json`；HttpOnly + SameSite 签名 Cookie；同账号连续 5 次错误锁定 1 小时，另按 IP 限流；可选邮箱验证码作为登录第二因素 |
+| 接口鉴权 | 所有数据接口都必须登录后才能访问 | 除健康检查、登录/邮箱验证和图片附件外，`/api/*` 由全局钩子强制校验登录 Token；新增接口默认拒绝未登录访问 |
 | 会话常驻 | 刷新/关页面不能中断任务 | 每个会话在服务端有一个 `ClaudeRuntime`，通过 Agent SDK 的流式输入维持 CLI 进程；浏览器 WebSocket 只订阅事件，不拥有进程 |
 | 刷新自动恢复 | 页面重开要看到“还在跑”的任务 | 事件持久化到 `data/transcripts/<id>.jsonl`；重连时按 `lastSeq` 回放，并下发当前运行状态、活动工具、待审批、后台任务 |
 | 实时对话 | 打字机式输出和工具过程 | SDK `includePartialMessages` 产生文本/思考增量，服务端归一化为 `assistant.delta` / `assistant.message`，经 WebSocket 推送；前端 Markdown + 工具卡片渲染 |
@@ -149,13 +150,14 @@ journalctl --user -u claude-web -f
 2. 设置用户名（字母、数字、`.` `_` `@` `-`，1–64 位）和密码（至少 8 位），确认后创建。
 3. 创建成功会自动登录；密码只以 bcrypt 哈希保存在本机 `data/auth.json`（0600），不会写入 Git。
 4. 同一账号连续 5 次密码错误会锁定 1 小时；登录接口另有 IP 频率限制。
-5. 忘记密码：在服务器执行
+5. 可在「设置 → 管理员账号 → 邮箱登录验证」开启邮箱验证码。开启前需要配置服务端 SMTP（见下方 `MAIL_ENV_FILE`）；开启后登录需要密码 + 邮箱验证码。SMTP 故障时可在服务器执行 `npm run disable-2fa` 临时关闭。
+6. 忘记密码：在服务器执行
    ```bash
    npm run set-password -- <用户名> <新密码>
    systemctl --user restart claude-web   # 系统服务用 systemctl restart claude-web
    ```
    或登录后在「设置 → 管理员账号」修改。
-6. 如果打开直接是登录页，说明已经初始化过；不知道密码时按上一步重置。
+7. 如果打开直接是登录页，说明已经初始化过；不知道密码时按上一步重置。
 
 默认外观（登录页和新浏览器）可在「设置 → 外观」配置为跟随系统 / 浅色 / 深色；当前浏览器仍可用左下角按钮单独切换。
 
@@ -196,6 +198,9 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 | `ACCOUNT_LOCK_MINUTES` | `60` | 锁定分钟数 |
 | `CLAUDE_BIN` | `PATH` 中的 `claude` | CLI 绝对路径（systemd 环境建议显式设置） |
 | `TRUST_PROXY` | `true` | 反向代理下取真实客户端 IP |
+| `MAIL_ENV_FILE` | `./data/mail.env` | 可选 SMTP 凭据文件（`SMTP_HOST/PORT/SECURITY/USER/PASS`、`MAIL_FROM/MAIL_TO`）；用于邮箱验证码，文件权限应为 0600 |
+| `SESSION_DAYS` | `7` | 登录 Cookie 有效天数；开启邮箱验证后可缩短 |
+| `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`；公网 HTTPS 建议 `always` |
 | `VOICE_PROXY_URL` | 空 | 可选的语音 HTTP 出口代理（本地代理或公司网关），不配置则直连 |
 | `GEMINI_LIVE_URL` | 空 | Gemini Live WebSocket 中转地址（需支持 Google 的地区） |
 | `GEMINI_LIVE_PROXY_TOKEN` | 空 | Live 中转的内部鉴权 Token（可选，服务端使用） |
@@ -230,7 +235,7 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 - 小文本文件（≤64 KB，单条消息总内联预算 128 KB）→ 内联进 `text` block，即使 Read 被拒绝模型也能读到；
 - 其他文件 → 在消息里给出绝对路径，Claude 按需用 Read 工具读取。
 
-transcript 只保存附件的 `id/name/mimeType/size/kind`，不保存文件字节；刷新后图片通过带登录 Cookie 的附件接口回放，非图片强制下载。单条最多 5 个、单文件默认 10 MB、总计 20 MB，可在环境变量里调整。完整链路、存储格式、安全边界和限制见 [附件链路](docs/ATTACHMENTS.md)。
+transcript 只保存附件的 `id/name/mimeType/size/kind`，不保存文件字节；刷新后图片通过公开的随机 capability URL 回放（无需登录），非图片仍要求登录 Cookie 并强制下载。单条最多 5 个、单文件默认 10 MB、总计 20 MB，可在环境变量里调整。完整链路、存储格式、安全边界和限制见 [附件链路](docs/ATTACHMENTS.md)。
 
 ### Web 原生命令
 

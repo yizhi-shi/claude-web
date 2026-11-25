@@ -46,7 +46,8 @@
 [历史 / 回放]
   transcript 只有附件描述
     → MessageItem 用 /api/sessions/:id/attachments/:attachmentId 渲染
-    → Cookie 鉴权后读取文件；图片内联显示，其他文件下载
+    → 图片是无登录 capability URL；非图片仍要 Cookie 鉴权后读取
+    → 图片内联显示，其他文件下载
 ```
 
 ## 1. 浏览器端入口
@@ -198,12 +199,12 @@ POST /api/sessions/:id/messages
 
 不保存 base64，也不保存文件字节。历史回放时：
 
-- 图片：`<img src="/api/sessions/:id/attachments/:attachmentId">`，带 Cookie；
-- 文件：同名下载链接；
+- 图片：`<img src="/api/sessions/:id/attachments/:attachmentId">`；图片附件故意不要求登录，作为随机 session id + 随机 attachment id 的 capability URL；
+- 文件：同名下载链接，非图片附件仍要求登录 Cookie；
 - 读取接口校验会话、附件 id 和侧车元数据；
 - 图片响应 `Content-Type` 使用白名单 MIME，`Content-Disposition: inline`；
 - 非图片强制 `application/octet-stream` + `Content-Disposition: attachment`，避免同源 HTML/SVG 被浏览器执行；
-- 附件响应允许 `Cache-Control: private, max-age=31536000, immutable`（文件名是随机 id，内容不可变）；其他 `/api/` 响应仍是 `no-store`。
+- 附件响应允许 `Cache-Control: private, max-age=86400`（文件名是随机 id，内容不可变）；其他 `/api/` 响应仍是 `no-store`。
 
 ## 5. 限制与配置
 
@@ -220,7 +221,8 @@ POST /api/sessions/:id/messages
 
 ## 6. 安全边界
 
-- 上传与下载都要求登录 Cookie；附件按会话隔离，不能用其他会话的 id 读当前会话附件；
+- 上传、非图片下载、附件列表等接口都要求登录 Cookie；图片附件是公开 capability URL（随机 session id + 随机 attachment id），拿到 URL 的人无需登录即可读取该图片；
+- 附件按会话隔离，不能用其他会话的 id 读当前会话附件；
 - 文件名只用于展示与下载头，磁盘名是服务端随机 id；
 - 侧车元数据在读取时再次校验 id、文件名正则、MIME、大小和 kind；
 - 严格 base64 校验，拒绝畸形数据；
@@ -253,7 +255,7 @@ POST /api/sessions/:id/messages
 
 - `AttachmentStore` 的校验、限额、图片/文本/二进制解析；
 - `buildUserContent()` 生成的 text/image blocks；
-- 真实 HTTP 上传、鉴权下载、未登录拒绝、越权/未知 id 404；
+- 真实 HTTP 上传、非图片鉴权下载、图片免登录读取、未登录拒绝、越权/未知 id 404；
 - Chrome 中文件选择、chip 上传/移除、历史缩略图；
 - 真实 Claude Code CLI 回合：附件中的代号只存在于文件里，模型回答出该代号，证明附件确实到达 CLI，而不仅是 HTTP 层。
 

@@ -4,9 +4,11 @@ import type {
   ContextUsage,
   DirListing,
   ExtensionsView,
+  LoginResponse,
   PermissionDecision,
   PermissionMode,
   ProjectSummary,
+  SecurityView,
   SessionRuntimeState,
   SessionSummary,
   StoredEvent,
@@ -69,7 +71,6 @@ import type { ThemeMode } from './store';
 
 export interface AuthStatus {
   setupRequired: boolean;
-  username: string;
   defaultTheme: ThemeMode;
 }
 
@@ -95,9 +96,24 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   login: (username: string, password: string) =>
-    request<{ user: { username: string } }>('/api/auth/login', {
+    request<LoginResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+  verifyEmail: (challengeId: string, code: string) =>
+    request<{ user: { username: string } }>('/api/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ challengeId, code }),
+    }),
+  resendEmail: (challengeId: string) =>
+    request<{
+      challengeId: string;
+      emailHint: string;
+      expiresAt: number;
+      resendAfterMs: number;
+    }>('/api/auth/resend-email', {
+      method: 'POST',
+      body: JSON.stringify({ challengeId }),
     }),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => request<{ user: { username: string } }>('/api/auth/me'),
@@ -105,6 +121,21 @@ export const api = {
     request<{ ok: boolean }>('/api/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ current, next }),
+    }),
+  security: () => request<SecurityView>('/api/auth/security'),
+  updateSecurity: (payload: {
+    enabled?: boolean;
+    email?: string;
+    currentPassword: string;
+  }) =>
+    request<SecurityView>('/api/auth/security', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  testSecurityEmail: (currentPassword: string) =>
+    request<{ ok: boolean }>('/api/auth/security/test-email', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword }),
     }),
 
   config: () => request<AppConfig>('/api/config'),

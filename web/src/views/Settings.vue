@@ -14,7 +14,7 @@ import {
   toast,
   type ThemeMode,
 } from '../store';
-import type { WorkspaceConfigView } from '../types';
+import type { SecurityView, WorkspaceConfigView } from '../types';
 import { prettyPath } from '../utils';
 
 const current = ref('');
@@ -23,6 +23,13 @@ const confirm = ref('');
 const busy = ref(false);
 const error = ref('');
 const workspace = ref<WorkspaceConfigView | null>(null);
+const security = ref<SecurityView | null>(null);
+const securityEmail = ref('');
+const securityEnabled = ref(false);
+const securityPassword = ref('');
+const securityBusy = ref(false);
+const securityTestBusy = ref(false);
+const securityError = ref('');
 const themeIcons: Record<ThemeMode, string> = {
   system: 'smartphone',
   light: 'sun',
@@ -126,9 +133,77 @@ async function changePassword(): Promise<void> {
   }
 }
 
+async function loadSecurity(): Promise<void> {
+  try {
+    security.value = await api.security();
+    securityEmail.value = security.value.email;
+    securityEnabled.value = security.value.emailVerificationEnabled;
+    securityError.value = '';
+  } catch (err) {
+    securityError.value =
+      err instanceof ApiError ? translateServerMessage(err.message) : t('读取邮箱验证设置失败');
+  }
+}
+
+async function saveSecurity(): Promise<void> {
+  if (securityBusy.value) return;
+  securityError.value = '';
+  if (!securityPassword.value) {
+    securityError.value = t('请输入当前密码以修改安全设置');
+    return;
+  }
+  if (securityEnabled.value && !securityEmail.value.trim()) {
+    securityError.value = t('开启邮箱验证前请填写邮箱地址');
+    return;
+  }
+  securityBusy.value = true;
+  try {
+    security.value = await api.updateSecurity({
+      enabled: securityEnabled.value,
+      email: securityEmail.value.trim(),
+      currentPassword: securityPassword.value,
+    });
+    securityEnabled.value = security.value.emailVerificationEnabled;
+    securityEmail.value = security.value.email;
+    securityPassword.value = '';
+    toast(
+      security.value.emailVerificationEnabled
+        ? t('邮箱验证已开启，下次登录需要验证码')
+        : t('邮箱验证已关闭'),
+      'success',
+    );
+  } catch (err) {
+    securityError.value =
+      err instanceof ApiError ? translateServerMessage(err.message) : t('保存邮箱验证设置失败');
+    await loadSecurity();
+  } finally {
+    securityBusy.value = false;
+  }
+}
+
+async function sendSecurityTest(): Promise<void> {
+  if (securityTestBusy.value) return;
+  securityError.value = '';
+  if (!securityPassword.value) {
+    securityError.value = t('请输入当前密码以发送测试邮件');
+    return;
+  }
+  securityTestBusy.value = true;
+  try {
+    await api.testSecurityEmail(securityPassword.value);
+    toast(t('测试邮件已发送，请检查收件箱'), 'success');
+  } catch (err) {
+    securityError.value =
+      err instanceof ApiError ? translateServerMessage(err.message) : t('测试邮件发送失败');
+  } finally {
+    securityTestBusy.value = false;
+  }
+}
+
 onMounted(() => {
   void loadConfig(true);
   void loadWorkspaces();
+  void loadSecurity();
 });
 </script>
 
@@ -181,6 +256,80 @@ onMounted(() => {
               <Icon name="lock" :size="15" />
               {{ busy ? t('更新中…') : t('更新密码') }}
             </button>
+          </div>
+
+          <div class="password-form email-2fa">
+            <div class="setting-block">
+              <span class="mini-label">{{ t('邮箱登录验证') }}</span>
+              <p class="muted">
+                {{ t('开启后，登录需要先输入密码，再输入发送到邮箱的 6 位验证码。') }}
+              </p>
+            </div>
+
+            <div v-if="!security" class="settings-loading">
+              <span class="spinner" />{{ t('读取安全设置…') }}
+            </div>
+
+            <template v-else>
+              <label class="check-row">
+                <input
+                  v-model="securityEnabled"
+                  type="checkbox"
+                  :disabled="
+                    securityBusy || (!security.emailConfigured && !security.emailVerificationEnabled)
+                  "
+                />
+                <span>{{ t('启用邮箱验证码') }}</span>
+                <span class="mini-label">
+                  {{ security.emailVerificationEnabled ? t('已开启') : t('已关闭') }}
+                </span>
+              </label>
+
+              <label class="field">
+                <span>{{ t('接收验证码的邮箱') }}</span>
+                <input
+                  v-model="securityEmail"
+                  type="email"
+                  autocomplete="email"
+                  spellcheck="false"
+                  :disabled="securityBusy"
+                  placeholder="name@example.com"
+                />
+              </label>
+
+              <label class="field">
+                <span>{{ t('当前密码（修改安全设置时确认）') }}</span>
+                <input
+                  v-model="securityPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  :disabled="securityBusy || securityTestBusy"
+                />
+              </label>
+
+              <p v-if="!security.emailConfigured" class="form-error">
+                <Icon name="alert" :size="15" />
+                {{ t('服务端尚未配置 SMTP，暂时无法开启邮箱验证。请配置 MAIL_ENV_FILE。') }}
+              </p>
+              <p v-if="securityError" class="form-error">
+                <Icon name="alert" :size="15" />{{ securityError }}
+              </p>
+
+              <div class="security-actions">
+                <button class="btn primary" :disabled="securityBusy" @click="saveSecurity">
+                  <Icon name="shield" :size="15" />
+                  {{ securityBusy ? t('保存中…') : t('保存邮箱验证') }}
+                </button>
+                <button
+                  class="btn secondary"
+                  :disabled="securityTestBusy || securityBusy || !security.emailConfigured"
+                  @click="sendSecurityTest"
+                >
+                  <Icon name="mail" :size="15" />
+                  {{ securityTestBusy ? t('发送中…') : t('发送测试邮件') }}
+                </button>
+              </div>
+            </template>
           </div>
         </section>
 

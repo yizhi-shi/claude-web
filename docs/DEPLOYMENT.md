@@ -44,7 +44,13 @@ sudo ./install.sh --system --dir /opt/claude-web --user "$SUDO_USER"
 2. 首次显示「初始化管理员」；设置用户名与至少 8 位密码。
 3. 创建后自动登录；密码以 bcrypt 哈希存 `data/auth.json`（0600）。
 4. 连续 5 次密码错误锁定该账号 1 小时。
-5. 忘记密码：
+5. 邮箱验证码（可选）：
+   - 准备一个 0600 的 SMTP 凭据文件，配置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURITY`、`SMTP_USER`、`SMTP_PASS`、`MAIL_FROM`，可选 `MAIL_TO`。
+   - 在 `data/claude-web.env` 设置 `MAIL_ENV_FILE=/path/to/mail.env`，重启服务。
+   - 登录后到「设置 → 管理员账号 → 邮箱登录验证」，保存邮箱并开启。
+   - 登录将变成“密码 + 邮箱 6 位验证码”；验证码 10 分钟过期，最多尝试 5 次。
+   - SMTP 故障或邮箱不可用时，在服务器执行 `npm run disable-2fa`，再重启服务；这是本地 break-glass，不通过 Web 暴露。
+6. 忘记密码：
    ```bash
    cd ~/.local/share/claude-web
    npm run set-password -- <用户名> <新密码>

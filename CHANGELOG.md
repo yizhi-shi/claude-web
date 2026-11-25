@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0 — 2026-11-25
+
+- Optional email-code second factor for login. Configure SMTP through `MAIL_ENV_FILE` (0600), enable it under Settings → Administrator account → Email sign-in verification, and log in with password + a 6-digit code (10-minute TTL, five attempts, HMAC storage). `npm run disable-2fa` is the local break-glass path.
+- Authenticated-by-default API policy: a global hook now requires the signed-in session cookie for every `/api/*` route except health, sign-in/email-verification, and image attachments. New routes fail closed. `GET /api/auth/status` no longer exposes the administrator username.
+- Image attachments are public capability URLs (random session id + random attachment id); non-image attachments still require login. Removed the stale `Cache-Control: immutable` year-long cache in favor of one day.
+- Imported Claude sessions and existing session index entries are now re-validated against `ALLOWED_ROOTS` before a runtime starts, closing the resume-by-id allowlist bypass.
+- Account lockout now resets the failure counter after a completed lock or idle window, so a single wrong password after expiry can no longer immediately re-lock the only admin.
+
+## 0.10.2 — 2026-11-24
+
+- Fixed the Extensions tab showing `Not found` plus “会话尚未运行……” when the frontend was new but the running server process was still an older build. A 404 from `GET /api/sessions/:id/extensions` now shows a clear “server outdated or not restarted, restart claude-web” hint and suppresses the misleading session-not-running fallback.
+- Clarified that rebuilding the server does not hot-reload Fastify routes: restart the `claude-web` service after `npm run build` so new API routes are registered. The smoke test now simulates the old-server 404 and checks the new message.
+
 ## 0.10.1 — 2026-11-24
 
 - Bilingual documentation: full English `README.en.md`, Chinese `SECURITY.zh-CN.md` and `CONTRIBUTING.zh-CN.md`, with language switches on every pair.
