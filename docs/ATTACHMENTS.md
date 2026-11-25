@@ -1,7 +1,7 @@
 # 附件链路：从 Web 上传到 Claude Code 接收
 
 > 状态: current
-> 最后核对: 2026-11-24
+> 最后核对: 2026-11-25
 > 事实源: `server/src/attachments.ts`、`server/src/runtime.ts`、`server/src/manager.ts`、`server/src/http.ts`、`server/src/ws.ts`、`web/src/views/Chat.vue`
 > 关联: [架构](ARCHITECTURE.md) · [核心实现](IMPLEMENTATION.md) · [UI 设计](UI-DESIGN.md)
 
@@ -142,7 +142,7 @@ POST /api/sessions/:id/messages
 
 `resolve()` 只读取当前会话目录下的侧车文件，不接受客户端传入的路径；侧车中的 `file` 字段还会用正则再次校验，防止手工篡改侧车造成路径穿越。
 
-附件-only 消息是允许的：`text` 可以为空，新会话标题取第一个附件名（没有附件名时用“附件”）。回合正在运行时发送会走排队逻辑，附件在发送时已经解析，排队事件仍然只带描述。
+附件-only 消息是允许的：`text` 可以为空，新会话标题取第一个附件名（没有附件名时用“附件”）。回合正在运行时发送会追加到当前会话；附件在发送时已经解析，追加事件仍然只带描述。
 
 ### 附件如何进入模型
 
@@ -234,9 +234,9 @@ POST /api/sessions/:id/messages
 
 ## 7. 与其他功能的关系
 
-- **排队消息**：如果回合正在运行，`user.message` 事件带 `queued: true` 立即显示；附件在发送时已经解析。若会话在投递前停止，事件会变成 `user.message.failed`，但附件文件仍留在磁盘。
+- **追加消息**：如果回合正在运行，`user.message` 事件带 `queued: true` 立即显示；附件在发送时已经解析。CLI 回显消息 uuid 后确认送达。若会话在投递前停止，事件会变成 `user.message.failed`，但附件文件仍留在磁盘；若原因是服务关闭，下次启动会用原事件 id 自动重发。
 - **旁问 `/btw`**：前端明确拒绝带附件的旁问（`旁问暂不支持附件`），避免把附件语义混进无工具的 fork 查询。
-- **终端历史导入**：从 `~/.claude/projects/*.jsonl` 导入的会话没有 Web 附件描述；原始 transcript 里的 image block 只会转成 `[图片]` 文本。
+- **终端历史导入**：从 `~/.claude/projects/*.jsonl` 导入的会话没有 Web 用户附件描述；工具结果里的 image block 会写入 `data/tool-images` 并生成可点击缩略图，文本占位仍是 `[图片]`。见 [工具结果图片](TOOL-IMAGES.md)。
 - **空闲休眠/服务重启**：附件是磁盘文件，不受运行时进程生命周期影响；历史仍可回放。
 
 ## 8. 已知限制

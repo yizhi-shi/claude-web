@@ -101,7 +101,7 @@ function extensionFor(name: string, mimeType: string): string {
   return /^[a-z0-9]{1,10}$/.test(ext) ? ext : 'bin';
 }
 
-function decodeBase64(value: unknown): Buffer {
+export function decodeBase64(value: unknown): Buffer {
   const raw = typeof value === 'string' ? value : '';
   if (
     !raw ||

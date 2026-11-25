@@ -311,6 +311,10 @@ export function attachmentUrl(sessionId: string, attachmentId: string): string {
   return `/api/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`;
 }
 
+export function toolImageUrl(sessionId: string, imageId: string): string {
+  return `/api/sessions/${encodeURIComponent(sessionId)}/tool-images/${encodeURIComponent(imageId)}`;
+}
+
 export function websocketUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}/ws`;

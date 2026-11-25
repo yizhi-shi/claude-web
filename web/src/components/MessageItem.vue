@@ -108,8 +108,8 @@ async function copyText(): Promise<void> {
       </div>
       <div v-if="item.text" class="user-bubble-text">{{ item.text }}</div>
       <div v-if="item.queued" class="user-msg-state queued">
-        <Icon name="clock" :size="12" />
-        <span>{{ t('排队中，等待当前步骤结束') }}</span>
+        <Icon :name="item.retrying ? 'refresh' : 'clock'" :size="12" />
+        <span>{{ item.retrying ? t('服务重启后正在重新发送') : t('已追加到当前会话') }}</span>
       </div>
       <div v-else-if="item.failed" class="user-msg-state failed">
         <Icon name="alert" :size="12" />
@@ -155,6 +155,7 @@ async function copyText(): Promise<void> {
           :name="String(block.name ?? 'tool')"
           :input="(block.input as Record<string, unknown>) ?? {}"
           :result="block.id ? item.toolResults.get(String(block.id)) : undefined"
+          :session-id="sessionId"
         />
         <div
           v-if="
@@ -185,6 +186,7 @@ async function copyText(): Promise<void> {
             :name="String(block.name ?? 'tool')"
             :input="(block.input as Record<string, unknown>) ?? {}"
             :result="block.id ? item.toolResults.get(String(block.id)) : undefined"
+            :session-id="sessionId"
           />
         </template>
         <div v-if="displayedBlocks.length === 0 && assistantText" class="msg-text markdown" v-html="renderMarkdown(assistantText)" />

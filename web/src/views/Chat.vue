@@ -2057,7 +2057,7 @@ onUnmounted(() => {
             </div>
             <span class="composer-hint">{{ t('Enter 发送 · Shift+Enter 换行 · Esc 停止') }}</span>
             <span class="composer-spacer" />
-            <span v-if="running && !stopping" class="queue-hint">{{ t('发送会排在当前步骤之后') }}</span>
+            <span v-if="running && !stopping" class="queue-hint">{{ t('消息会追加到当前会话') }}</span>
             <button
               v-if="running"
               class="btn ghost small composer-stop"
@@ -2071,7 +2071,7 @@ onUnmounted(() => {
             </button>
             <button class="btn primary send-btn" :disabled="!canSend" @click="send">
               <Icon name="send" :size="15" />
-              {{ running ? t('排队发送') : t('发送') }}
+              {{ running ? t('追加发送') : t('发送') }}
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 # VSCode Claude Code 插件能力对照
 
 > 状态: current
-> 最后核对: 2026-11-24
+> 最后核对: 2026-11-25
 > 事实源: 本机 `anthropic.claude-code` 插件 2.1.330、CLI 2.1.330、Agent SDK 0.3.330
 > 关联: [架构](ARCHITECTURE.md) · [Roadmap](ROADMAP.md)
 
@@ -17,7 +17,9 @@
 | 权限模式切换 | ✅ | ✅ | default / acceptEdits / plan / auto / dontAsk / bypass |
 | 会话历史与续聊 | ✅ | ✅ | 扫描 `~/.claude/projects`，`resume` |
 | 历史分页 / 加载更早 | ✅ | ✅ | 消息级分页（`compact=1` 过滤 token delta）；滚到顶部自动加载，按钮兜底 |
-| 运行中追加消息 | ✅ | ✅ | 立即显示；`queued` → `delivered`/`failed`；模型在下一回合边界看到追加内容 |
+| 运行中追加消息 | ✅ | ✅ | 立即显示并标记「已追加到当前会话」；CLI 回显 uuid 即确认，可在当前回合工具轮次间折入；服务重启自动重发关服时未确认的消息 |
+| 工具结果图片预览 | ✅ | ✅ | Read/截图等工具返回的 image block 落盘到 `data/tool-images`；工具卡缩略图 + 页内 lightbox + 新标签打开；需登录 |
+| 工具输出文本预览 | ✅ | ✅ | 完整输出以 `text/plain` Blob 在新标签打开；Bash ANSI 转义会剥离 |
 | 会话列表状态 | ✅ | ✅ | 运行中 / 等待审批 / 空闲 / 停止 / 异常 |
 | 后台任务/子代理状态 | ✅ | ✅ | task_started/progress/updated/notification |
 | 上下文用量 / 费用 | ✅ | ✅ | `getContextUsage` + `total_cost_usd` |

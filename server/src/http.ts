@@ -157,10 +157,14 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     // geolocation stay disabled. `microphone=()` would make getUserMedia fail
     // with NotAllowedError before the browser ever shows a permission prompt.
     reply.header('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
-    // Attachment bytes are immutable (UUID file names) and can be cached
-    // privately; every other API response must not be cached.
-    const isAttachment = /^\/api\/sessions\/[^/]+\/attachments\/[^/?]+(?:\?.*)?$/.test(req.url);
-    if (req.url.startsWith('/api/') && !isAttachment) {
+    // Attachment and tool-image bytes are immutable (UUID file names) and can
+    // be cached privately; every other API response (including failed asset
+    // reads) must not be cached.
+    const isImmutableAsset = /^\/api\/sessions\/[^/]+\/(?:attachments|tool-images)\/[^/?]+(?:\?.*)?$/.test(
+      req.url,
+    );
+    const cacheableAsset = isImmutableAsset && reply.statusCode < 400;
+    if (req.url.startsWith('/api/') && !cacheableAsset) {
       reply.header('Cache-Control', 'no-store');
     }
     return payload;
@@ -649,6 +653,25 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     reply.header('Content-Length', String(size));
     reply.header('Cache-Control', 'private, max-age=86400');
     if (!user) reply.header('X-Robots-Tag', 'noindex, nofollow');
+    return reply.send(fs.createReadStream(file));
+  });
+
+  // Tool-result images are agent data, not public capability URLs: every read
+  // requires the signed-in session cookie and stays scoped to its session.
+  authed(app, 'GET', '/api/sessions/:id/tool-images/:imageId', async (req, reply) => {
+    const { id, imageId } = req.params as { id: string; imageId: string };
+    if (!SESSION_ID_RE.test(id)) {
+      return reply.code(404).send({ error: '图片不存在' });
+    }
+    if (!manager.index.get(id) && !manager.transcript.exists(id)) {
+      return reply.code(404).send({ error: '图片不存在' });
+    }
+    const { meta, file, size } = manager.toolImages.read(id, imageId);
+    reply.header('Content-Type', meta.mimeType);
+    reply.header('Content-Disposition', contentDisposition('image', meta.name));
+    reply.header('Content-Length', String(size));
+    reply.header('Cache-Control', 'private, max-age=86400');
+    reply.header('X-Robots-Tag', 'noindex, nofollow');
     return reply.send(fs.createReadStream(file));
   });
 

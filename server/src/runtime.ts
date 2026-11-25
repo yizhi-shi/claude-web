@@ -8,6 +8,7 @@ import {
 import type { PermissionMode as SdkPermissionMode } from '@anthropic-ai/claude-agent-sdk';
 import type { ResolvedAttachment } from './attachments.js';
 import { config, childEnv } from './config.js';
+import type { ToolImageStore } from './toolImages.js';
 import { TranscriptStore } from './transcript.js';
 import type {
   AgentInfoView,
@@ -27,6 +28,7 @@ import type {
   SessionMeta,
   SessionRuntimeState,
   TaskView,
+  ToolImageRef,
   UiEvent,
   UiEventInput,
 } from './types.js';
@@ -40,6 +42,8 @@ interface RuntimeOptions {
   model?: string;
   title?: string;
   transcript: TranscriptStore;
+  /** Session-scoped storage for base64 image blocks returned by tools. */
+  toolImages: ToolImageStore;
   onMeta: (patch: Partial<SessionMeta>) => void;
 }
 
@@ -457,9 +461,9 @@ export class ClaudeRuntime {
 
   private enqueue(message: SDKUserMessage, eventId?: string): void {
     if (this.inputClosed) return;
-    // The SDK pulls stream input eagerly, so "handed to the SDK" is not the
-    // same as "the model will see it". Keep the queued id until the next turn
-    // result confirms the turn boundary.
+    // The SDK writes stream input to the CLI eagerly, so "handed to the SDK"
+    // is not the same as "the CLI consumed it". Keep the event id until a
+    // frame echoes the message uuid (or, on older CLIs, a turn result).
     if (eventId) this.pendingInputIds.push(eventId);
     const waiter = this.inputWaiters.shift();
     if (waiter) waiter({ value: message, done: false });
@@ -469,6 +473,36 @@ export class ClaudeRuntime {
   private markInputDelivered(): void {
     const id = this.pendingInputIds.shift();
     if (id) this.emit({ type: 'user.message.delivered', id });
+  }
+
+  /**
+   * The CLI stamps assistant/stream/result frames with the client uuid of the
+   * user message(s) it has consumed. This is the earliest reliable delivery
+   * signal: a message sent during a running turn can be folded in between
+   * tool rounds, well before the turn's final result. Marking it here makes
+   * the "added to this conversation" chip clear at that point instead of
+   * waiting for the next turn boundary.
+   */
+  private markConsumedInputs(raw: Record<string, unknown>): void {
+    const listed = raw.user_message_uuids;
+    if (Array.isArray(listed)) {
+      const ids = listed.filter((value): value is string => typeof value === 'string');
+      if (ids.length > 0) {
+        this.markInputIdsDelivered(ids);
+        return;
+      }
+    }
+    const single = raw.user_message_uuid;
+    if (typeof single === 'string') this.markInputIdsDelivered([single]);
+  }
+
+  private markInputIdsDelivered(ids: string[]): void {
+    for (const id of ids) {
+      const index = this.pendingInputIds.indexOf(id);
+      if (index < 0) continue;
+      this.pendingInputIds.splice(index, 1);
+      this.emit({ type: 'user.message.delivered', id });
+    }
   }
 
   private failPendingInputs(reason: string): void {
@@ -580,22 +614,33 @@ export class ClaudeRuntime {
     }
   }
 
-  sendUserMessage(text: string, attachments: ResolvedAttachment[] = []): void {
+  sendUserMessage(
+    text: string,
+    attachments: ResolvedAttachment[] = [],
+    options: { id?: string; recovered?: boolean } = {},
+  ): void {
     if (this.stopped) throw new Error('会话进程已停止');
     const clean = text.trim();
     if (!clean && attachments.length === 0) return;
     const refs: AttachmentRef[] = attachments.map((attachment) => attachment.ref);
     const wasRunning = this.status === 'running' || this.status === 'waiting_permission';
-    const eventId = randomId();
+    const eventId = options.id ?? randomId();
     this.lastAssistantText = '';
     this.clearIdleTimer();
-    this.emit({
-      type: 'user.message',
-      id: eventId,
-      text: clean,
-      ...(refs.length > 0 ? { attachments: refs } : {}),
-      ...(wasRunning ? { queued: true } : {}),
-    });
+    if (options.recovered) {
+      // The original user.message (and its failed marker) is already in the
+      // transcript. Update that bubble in place instead of appending a
+      // duplicate message.
+      this.emit({ type: 'user.message.retrying', id: eventId });
+    } else {
+      this.emit({
+        type: 'user.message',
+        id: eventId,
+        text: clean,
+        ...(refs.length > 0 ? { attachments: refs } : {}),
+        ...(wasRunning ? { queued: true } : {}),
+      });
+    }
     if (!this.title || this.title === '新会话') {
       this.title = truncate(clean || refs[0]?.name || '附件', 80);
       this.options2.onMeta({ title: this.title });
@@ -612,6 +657,10 @@ export class ClaudeRuntime {
         message: { role: 'user', content: buildUserContent(clean, attachments) },
         parent_tool_use_id: null,
         session_id: this.claudeSessionId ?? '',
+        // The CLI echoes this uuid on frames for the turn that consumes the
+        // message, including a mid-turn fold. Keep it aligned with the event id
+        // so delivery can be confirmed without waiting for a turn boundary.
+        uuid: eventId,
       } as SDKUserMessage,
       eventId,
     );
@@ -1054,6 +1103,7 @@ export class ClaudeRuntime {
   }
 
   private handleMessage(raw: Record<string, unknown>): void {
+    this.markConsumedInputs(raw);
     const type = raw.type as string | undefined;
     const subtype = raw.subtype as string | undefined;
 
@@ -1254,12 +1304,19 @@ export class ClaudeRuntime {
         if (block.type !== 'tool_result') continue;
         const toolUseId = typeof block.tool_use_id === 'string' ? block.tool_use_id : '';
         if (!toolUseId) continue;
+        let images: ToolImageRef[] = [];
+        try {
+          images = this.options2.toolImages.saveFromContent(this.wid, block.content);
+        } catch {
+          // Image previews are best-effort; the text result must still arrive.
+        }
         this.emit({
           type: 'tool.result',
           toolUseId,
           content: toolResultText(block.content),
           isError: block.is_error === true,
           structured,
+          ...(images.length > 0 ? { images } : {}),
         });
         this.activeTools.delete(toolUseId);
         const remaining = [...this.activeTools.entries()].at(-1);
@@ -1292,8 +1349,15 @@ export class ClaudeRuntime {
       }
       const subtypeResult = String(raw.subtype ?? 'success');
       const isError = subtypeResult !== 'success' || raw.is_error === true;
-      // One queued message is consumed at each turn boundary (FIFO).
-      this.markInputDelivered();
+      // Older CLIs do not echo user-message uuids. Keep the turn-boundary FIFO
+      // fallback only for them; with uuid metadata, delivery is confirmed when
+      // the CLI reports the message as consumed.
+      if (
+        typeof raw.user_message_uuid !== 'string' &&
+        !Array.isArray(raw.user_message_uuids)
+      ) {
+        this.markInputDelivered();
+      }
       this.emit({
         type: 'turn.result',
         subtype: subtypeResult,

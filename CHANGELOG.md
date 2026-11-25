@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0 — 2026-11-25
+
+- Tool-result images are no longer discarded as `[图片]`. Image blocks returned by `Read`, screenshot tools or MCP tools are stored under `data/tool-images/<sessionId>/` (0600, sidecar metadata), while the transcript stores only a descriptor. Tool cards render thumbnails that open an in-page lightbox (click outside or `Escape` closes, plus open-original), and the image endpoint requires login and is session-scoped. Imported Claude history uses the same pipeline.
+- Tool output can now be opened in a new browser tab as plain text with the full content; Bash ANSI escapes are stripped. This is a client-side Blob, no new server API.
+- Messages sent during a running turn are now labelled “added to this conversation” / “add to conversation”; the SDK user message carries the UI event UUID, and the server clears the chip as soon as the CLI echoes `user_message_uuid(s)`, which can happen between tool rounds before the turn result.
+- Messages whose last state is `user.message.failed` with reason `服务关闭` are re-sent automatically on the next runtime start using the original event id and a `user.message.retrying` event; the bubble updates in place instead of showing a permanent “未送达：服务关闭” or duplicating the user message. User-requested stops are not retried.
+- Added `docs/TOOL-IMAGES.md`, `docs/README.en.md` summary, bilingual README updates, and smoke tests: real `Read` image preview/lightbox/401, new-tab text output, and SIGTERM/restart queue recovery.
+
 ## 0.12.0 — 2026-11-25
 
 - Reworked the Settings page into a task-grouped named grid: account and appearance share the first row, sign-in security spans the full width with email and SMTP columns, workspace and runtime pair up, voice spans the full width, and security notes close the page.

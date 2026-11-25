@@ -1,8 +1,9 @@
-import type { AttachmentRef, ContentBlock, UiEvent } from './types';
+import type { AttachmentRef, ContentBlock, ToolImageRef, UiEvent } from './types';
 
 export interface ToolResultInfo {
   content: string;
   isError?: boolean;
+  images?: ToolImageRef[];
 }
 
 export interface AssistantItem {
@@ -26,6 +27,7 @@ export interface UserItem {
   text: string;
   attachments?: AttachmentRef[];
   queued?: boolean;
+  retrying?: boolean;
   failed?: boolean;
   failureReason?: string;
   ts: number;
@@ -78,6 +80,7 @@ export function buildChatItems(events: UiEvent[]): ChatItem[] {
       toolResults.set(event.toolUseId, {
         content: event.content,
         isError: event.isError,
+        images: event.images,
       });
     }
     if (event.type === 'turn.result') {
@@ -110,9 +113,23 @@ export function buildChatItems(events: UiEvent[]): ChatItem[] {
       continue;
     }
 
+    if (event.type === 'user.message.retrying') {
+      const item = userById.get(event.id);
+      if (item) {
+        item.queued = true;
+        item.retrying = true;
+        item.failed = false;
+        item.failureReason = undefined;
+      }
+      continue;
+    }
+
     if (event.type === 'user.message.delivered') {
       const item = userById.get(event.id);
-      if (item) item.queued = false;
+      if (item) {
+        item.queued = false;
+        item.retrying = false;
+      }
       continue;
     }
 
@@ -120,6 +137,7 @@ export function buildChatItems(events: UiEvent[]): ChatItem[] {
       const item = userById.get(event.id);
       if (item) {
         item.queued = false;
+        item.retrying = false;
         item.failed = true;
         item.failureReason = event.reason;
       }

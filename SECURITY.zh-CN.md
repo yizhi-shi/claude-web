@@ -41,6 +41,7 @@ Claude Code Web 以服务运行用户的身份运行本机 `claude` CLI。任何
 - 语音 Key 在 API 响应中只返回掩码，且只存储在服务端。
 - 附件保存在 `data/attachments/<sessionId>/`，使用服务端生成的随机文件名和 `0600` 权限；附件 id 绑定所属会话，绝不使用客户端提供的路径。图片附件是刻意公开的 capability URL（随机会话 id + 随机附件 id）用于内联渲染；非图片附件仍要求会话 Token。
 - 附件上传在服务端强制执行严格的 base64 解码、MIME 语法检查、显示名 basename/清洗、生成磁盘文件名，以及单文件/数量/总大小限制。附属元数据在每次读取时都会重新校验。
+- 工具结果图片（agent 读取/生成的图片）与用户附件分开：保存在 `data/tool-images`，只接受 PNG/JPEG/GIF/WebP，读取接口必须登录且按会话隔离，不是公开 capability URL。
 - 只有 PNG/JPEG/GIF/WebP 会被当作图片（刻意排除 SVG）。非图片文件强制使用 `application/octet-stream` + `Content-Disposition: attachment`；图片使用内联 disposition 和白名单 MIME。CSP + `nosniff` 进一步降低同源脚本执行风险。
 - Fastify 请求体上限为 18 MB；base64 膨胀后附件限制应保持在其之下。反向代理必须配置兼容的 `client_max_body_size`。
 - 上传文件不会做病毒扫描，其内容会进入模型上下文；请把附件视为不可信输入。

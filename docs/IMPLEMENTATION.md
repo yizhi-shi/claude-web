@@ -1,7 +1,7 @@
 # 核心实现说明（SDK 宿主 + Web 视图层）
 
 > 状态: current
-> 最后核对: 2026-11-24
+> 最后核对: 2026-11-25
 > 事实源: `server/src/runtime.ts`、`ws.ts`、`http.ts`、`web/src/views/Chat.vue`、Claude Code CLI / Agent SDK 控制协议
 > 关联: [架构](ARCHITECTURE.md) · [VSCode 对照](FEATURE-PARITY.md) · [语音](VOICE-ASR.md)
 
@@ -174,14 +174,15 @@ CLI 对未拦截命令返回的 assistant 消息可能带 `model: "<synthetic>"`
 - 错误与费用：`result.is_error` 但已有正文时按部分答案返回；错误信息会带 `errors` 并翻译 `error_max_turns` / 上下文过长；费用使用 `model_usage_since_last_result` 的单回合费用，不计入主会话 `costUsd`。
 - 并发与清理：每会话最多 2 个旁问；socket 断开、重新 attach、会话 stop、服务 shutdown 都会取消；5 分钟超时。
 
-### 历史分页、排队消息与运行中追加
+### 历史分页、追加消息与运行中发送
 
 - 历史接口 `GET /api/sessions/:id/events` 新增 `compact=1`：`TranscriptStore.readWindow` 跳过 `assistant.delta`，只返回可渲染事件。一次长回答可能产生数千条 token 增量；过去按原始事件分页时，240 条窗口会被当前回合的 delta 占满，用户消息和更早历史因此“加载不出来”。
 - 首次载入使用 `compact=1&tail=1`；前端把 `lastSeq` 设为最后一条可渲染事件的 seq，再 attach WebSocket，服务端从该点回放 delta，正在流式输出的部分文本仍能重建。
 - 「加载更早」仍用 `before=firstSeq&compact=1`；聊天区滚动到距顶部 80px 且内容足够长时自动加载，按钮保留为兜底。加载后按高度差补偿滚动位置，避免视口跳动。
-- 发送时如果回合正在运行，`user.message` 事件带 `queued: true` 并立即写入 transcript/广播；前端在气泡内显示「排队中，等待当前步骤结束」。
-- SDK 会**立即预取**流式输入，所以“进入输入队列”不等于“模型已经看到”。服务端改为在每次 `turn.result` 时确认最早一条排队消息，发 `user.message.delivered`（FIFO）；会话 stop、进程结束或异常时对剩余消息发 `user.message.failed`。前端据此清除 chip 或显示「未送达」。
-- 模型在下一回合边界看到追加消息；无需 `priority` 也能追加进同一会话上下文，避免额外产生空回合。
+- 发送时如果回合正在运行，`user.message` 事件带 `queued: true` 并立即写入 transcript/广播；前端在气泡内显示「已追加到当前会话」，发送按钮显示「追加发送」。
+- 发给 SDK 的用户消息带 `uuid`（与 UI 事件 id 相同）。CLI 在消费消息后会把 `user_message_uuid` / `user_message_uuids` 回显到 assistant / stream / result 帧；服务端看到回显立即发 `user.message.delivered`，不再固定等到 `turn.result`。追加消息可以在当前回合的工具轮次之间折入，因此 chip 可能早于回合结束清除。
+- 正在执行的单个工具调用不能被插入；追加消息至少等当前工具结束并到达下一个处理点，CLI 才会读取。这是 CLI/模型回合边界，不是 Web 队列可以绕过的限制。
+- 会话 stop 或进程异常时，仍未确认的消息写 `user.message.failed`；服务启动时 `SessionManager` 会把 reason 为「服务关闭」的 queued 消息用原事件 id 重发，并写 `user.message.retrying`，前端把同一条气泡改为「服务重启后正在重新发送」，不重复插入一条用户消息。详见 [工具图片与运行中追加](TOOL-IMAGES.md)。
 - `/btw` 在主输入框被前端拦截并转到旁问面板（不是 CLI 命令）；其他 `/命令` 和 Skill 仍按 CLI `system/init` 的 `slash_commands` 原样发送，`/context` 已做端到端验证。
 
 ## 3. 关闭页面为什么不停止后台

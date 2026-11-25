@@ -36,6 +36,18 @@ export interface AttachmentRef {
   kind: 'image' | 'file';
 }
 
+/**
+ * An image returned by a tool (for example Read on a PNG). The bytes live
+ * under `data/tool-images/<sessionId>/`; the transcript only stores this
+ * descriptor so replay and history fetches stay small.
+ */
+export interface ToolImageRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface TaskView {
   id: string;
   description: string;
@@ -181,11 +193,17 @@ export type UiEvent =
       id: string;
       text: string;
       attachments?: AttachmentRef[];
-      /** True when the message was sent while a turn was already running. */
+      /**
+       * True when the message was sent while a turn was already running.
+       * The CLI may fold it into the running turn between tool rounds; the
+       * UI clears this state once the CLI echoes the message uuid.
+       */
       queued?: boolean;
     })
   | (EventBase & { type: 'user.message.delivered'; id: string })
   | (EventBase & { type: 'user.message.failed'; id: string; reason?: string })
+  /** A message lost to a service shutdown is being re-sent after restart. */
+  | (EventBase & { type: 'user.message.retrying'; id: string })
   | (EventBase & {
       type: 'assistant.message';
       messageId: string;
@@ -210,6 +228,7 @@ export type UiEvent =
       content: string;
       isError?: boolean;
       structured?: unknown;
+      images?: ToolImageRef[];
     })
   | (EventBase & {
       type: 'permission.request';

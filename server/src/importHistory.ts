@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { ContentBlock, UiEventInput } from './types.js';
+import type { ContentBlock, ToolImageRef, UiEventInput } from './types.js';
 import { parseJsonObject, truncate } from './util.js';
 
 type Raw = Record<string, unknown>;
@@ -69,7 +69,10 @@ export function cleanUserText(text: string): string {
   return stripped;
 }
 
-export function convertClaudeTranscript(lines: Raw[]): UiEventInput[] {
+export function convertClaudeTranscript(
+  lines: Raw[],
+  saveImages?: (content: unknown) => ToolImageRef[],
+): UiEventInput[] {
   const events: UiEventInput[] = [];
   const seen = new Set<string>();
   const assistantIndex = new Map<string, number>();
@@ -119,12 +122,21 @@ export function convertClaudeTranscript(lines: Raw[]): UiEventInput[] {
         } else if (block.type === 'tool_result') {
           const toolUseId = typeof block.tool_use_id === 'string' ? block.tool_use_id : '';
           if (!toolUseId) continue;
+          let images: ToolImageRef[] = [];
+          if (saveImages) {
+            try {
+              images = saveImages(block.content);
+            } catch {
+              // A preview is best-effort; imported text still renders.
+            }
+          }
           push(`tr:${toolUseId}`, {
             type: 'tool.result',
             toolUseId,
             content: toolResultText(block.content),
             isError: block.is_error === true,
             structured: entry.toolUseResult,
+            ...(images.length > 0 ? { images } : {}),
           });
         }
       }

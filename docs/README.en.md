@@ -26,6 +26,10 @@ A host application for the official Claude Code Agent SDK plus a browser view la
 
 End-to-end flow from browser upload to Claude Code: attachment button/paste/drag → upload API → `data/attachments/<sessionId>/` → message references attachment ids → `AttachmentStore.resolve()` → image blocks / inlined text / absolute paths → history replay. Also documents limits, storage format, path-traversal and XSS mitigations, and known gaps.
 
+### [Tool-result images, text preview and in-turn append](TOOL-IMAGES.md) (Chinese)
+
+How image blocks returned inside tool results are stored under `data/tool-images` (0600) with only a descriptor in the transcript, served through an authenticated session-scoped endpoint, and rendered as a thumbnail plus in-page lightbox; how full tool text opens as plain text in a new tab; and how messages sent during a running turn are appended, confirmed by the CLI uuid, and re-sent after a service-shutdown failure.
+
 ### [Extension management scope](EXTENSIONS.md) (Chinese)
 
 Why the Web UI manages MCP status, reconnect and session-scoped enable/disable, and shows subagents read-only, while deliberately skipping plugin marketplace/install, hooks editing, and MCP add/edit/auth. Includes the decision matrix, APIs, security allowlist and verification; a stale server that lacks the extensions route is reported as a restart hint instead of "session not running".
@@ -40,7 +44,7 @@ Provider research and implementation for whole-utterance transcription and real-
 
 ### [UI design and interaction decisions](UI-DESIGN.md) (Chinese)
 
-Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, voice provider tabs), diff/code readability, the language switch, and accessibility details.
+Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, voice provider tabs), tool-result image thumbnails/lightbox and new-tab text preview, diff/code readability, the language switch, and accessibility details.
 
 ### [VS Code extension feature parity](FEATURE-PARITY.md) (Chinese)
 
@@ -48,7 +52,7 @@ Capability-by-capability comparison with the VS Code Claude Code extension, plus
 
 ### [Roadmap](ROADMAP.md) (Chinese)
 
-What is already available, known limitations, next priorities and product principles. Checkpoints/rewind, file tree/editor, Git panel and multi-agent orchestration are intentionally deferred.
+What is already available, known limitations, next priorities and product principles. Includes the lack of quota/cleanup for attachment and tool-image storage, and the bounded shutdown-recovery window for appended messages. Checkpoints/rewind, file tree/editor, Git panel and multi-agent orchestration are intentionally deferred.
 
 ### [Competitive research](COMPETITIVE-RESEARCH.md) (Chinese)
 

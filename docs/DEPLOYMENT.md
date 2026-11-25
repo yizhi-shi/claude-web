@@ -1,7 +1,7 @@
 # 部署教程（人工 / Agent）
 
 > 状态: current
-> 最后核对: 2026-11-24
+> 最后核对: 2026-11-25
 > 关联: [README](../README.md) · [架构](ARCHITECTURE.md)
 
 ## 人工部署
@@ -115,6 +115,7 @@ systemctl --user restart claude-web
 - 限制：`MAX_ATTACHMENTS`（默认 5）、`MAX_ATTACHMENT_MB`（默认 10）、`MAX_TOTAL_ATTACHMENT_MB`（默认 20）。Fastify 请求体上限是 18 MB，base64 会膨胀约 1/3；调大单文件上限时要同步确认仍低于请求体上限。
 - 反向代理要允许附件 JSON 上传；nginx 示例里的 `client_max_body_size` 不能小于应用上限。
 - 目前没有自动清理/配额：上传后未发送、移除 chip 或发送失败都会留下文件，长期运行需要定期清理 `data/attachments`（Roadmap 已列）。删除目录只影响历史附件显示，不影响 transcript 中的文字记录。
+- 工具结果图片保存在 `DATA_DIR/tool-images/<sessionId>/`（文件与 sidecar 均 `0600`），读取需要登录，不是公开静态目录；备份 `data/` 时应包含它。它同样没有配额/自动清理。
 - 非图片附件以 `application/octet-stream` 强制下载；不要把 `data/attachments` 直接暴露为静态目录。
 
 ### 卸载

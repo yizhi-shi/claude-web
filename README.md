@@ -21,7 +21,7 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 - 页面只是“附着”到会话；断开 WebSocket 不会停止 Claude。
 - 重新打开页面会自动恢复运行状态、历史消息、待审批请求和后台任务。
 - 支持多项目、历史会话、工具审批、文件 diff、命令/技能、`@` 文件引用、图片/文件附件、旁问（/btw）和语音输入。
-- 历史按“可渲染事件”分页，滚到顶部自动加载更早消息；运行中追加的消息立即出现在对话里，并显示排队/送达状态。
+- 历史按“可渲染事件”分页，滚到顶部自动加载更早消息；运行中追加的消息立即出现在对话里，并显示「已追加到当前会话」，CLI 确认后自动清除；服务重启会重发关服时未确认的追加消息。
 - 桌面与手机共用一套响应式布局，支持亮/暗主题。
 
 ---
@@ -39,13 +39,14 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 交互提问 / 计划确认 | Claude 需要用户选择或批准计划时不能卡住 | `AskUserQuestion` 渲染单选/多选问答卡片，答案经 `updatedInput.answers` 回传；`ExitPlanMode` 展示前一条 assistant 消息中的计划，支持批准、退回完善与修改意见。挂起项存在运行时状态里，刷新可恢复；即使会话默认全部允许，提问仍会显示 |
 | “全部允许”默认模式 | 个人可信环境不想每次点确认 | UI 选择 `bypassPermissions`；由于 CLI 禁止 root 使用 `--dangerously-skip-permissions`，服务端用 `default` 模式 + `canUseTool` 自动放行来等价实现（仍记录工具调用） |
 | 历史会话 / 续聊 | 复用终端或 VSCode 里已有的会话 | 扫描 `~/.claude/projects/*/*.jsonl`；把 Claude 原始 transcript 归一化为 Web 事件；用 `resume` 恢复同一 session；大历史只加载最近窗口，可“加载更早” |
-| 历史分页 / 排队消息 | 刷新后历史不能丢；排队发送要看得见 | 历史查询带 `compact=1`，过滤 token 级 `assistant.delta`，按消息级事件分页；滚到顶部自动加载更早。运行中发送的消息立即入 transcript，`user.message` 带 `queued`；回合边界发 `user.message.delivered`，停止时发 `user.message.failed`，输入区显示排队 chip |
+| 历史分页 / 追加消息 | 刷新后历史不能丢；运行中追加要看得见、不能丢 | 历史查询带 `compact=1`，过滤 token 级 `assistant.delta`，按消息级事件分页；滚到顶部自动加载更早。运行中发送的消息立即入 transcript，`user.message` 带 `queued` 与 CLI uuid；CLI 回显 uuid 后发 `user.message.delivered`，停止时发 `failed`，服务重启自动重发关服时未确认的消息 |
 | 实时执行状态 | 知道现在在跑什么、跑了多久 | 从 `tool_use` / `tool_result` / `tool_progress` / task 事件维护活动工具列表；展示当前工具、耗时、后台子任务、上下文占用、费用和压缩状态 |
 | 工作区配置 | 会话应该跑在哪个目录 | 环境变量 `ALLOWED_ROOTS` + `data/workspaces.json` 的额外目录/默认目录；所有 cwd 做 realpath + 白名单校验；选择器可直接新建文件夹 |
 | 命令 / 技能 / 文件引用 | 对齐 VSCode 插件的输入能力 | 从 `system/init` 读取 `slash_commands` 与 `skills`；输入 `/` 弹出命令/技能菜单；输入 `@` 通过 `rg --files` 搜索当前项目文件并插入相对路径。`/model`、`/context`、`/usage`、`/status`、`/permissions`、`/config`、`/help` 由 Web 原生面板处理，其余命令交给 CLI |
 | 系统配置命令适配 | CLI 的配置命令输出不要伪装成 Claude 回复 | `/model` 等由 Web 原生面板处理；`model: "<synthetic>"` 的 assistant 消息渲染为「系统」通知，隐藏 `<synthetic>` 模型 chip；`No response requested.` 等空系统消息不占对话 |
 | MCP / 子代理状态 | 需要知道扩展是否真的可用 | `/mcp` 扩展面板展示当前会话的 MCP 状态、工具、错误，可重连和当前会话启停；`/agents` 只读列出子代理。插件市场、hooks、MCP 认证仍由 CLI 管理；不把 MCP env/headers/命令路径发给浏览器 |
 | 图片 / 文件附件 | 截图、日志、文档不想手工转述 | 输入框支持粘贴图片、拖拽文件与文件选择；服务端落盘 `data/attachments`（0600）并以 id 引用。发送时图片转 Anthropic `image` content block，小文本文件内联，其他文件按绝对路径交给 Claude 读取；历史消息渲染缩略图/文件 chip |
+| 工具结果图片 / 文本预览 | Agent 读取或生成图片后不能只显示 `[图片]`；中间输出想用浏览器细看 | 工具结果 image block 落盘 `data/tool-images`（0600），transcript 只存描述符；工具卡显示缩略图，点击打开页内 lightbox，也可在新标签看原图；工具文本输出可从「输出」区在新标签以纯文本打开 |
 | 旁问（/btw） | 任务运行中想快速问一句，又不想打断 | 顶部「旁问」打开浮动面板（桌面右下 / 手机底部卡片）；拖动顶部把手可上下调整高度并记忆，双击还原。服务端从最近可渲染事件生成紧凑上下文，建临时、禁工具、不落盘、不 resume 的查询，基于当前上下文流式回答；答案不进入主对话，可取消，费用单独显示 |
 | 语音输入 | 手机/免手操作时快速输入 | 麦克风按钮直接开始/结束听写；默认整段 WebM 上传转写，也可开启实时流式边说边写。渠道在「设置 → 语音识别」配置一次。支持 Gemini 3.5 Transcribe / Live、OpenAI 兼容（官方 Realtime 或分段实时；OpenAI/Groq/SiliconFlow/本地 faster-whisper）、字节火山引擎流式 WebSocket、浏览器内置 |
 | 多端布局 / 亮暗主题 | 手机和电脑都要好用 | Vue 3 + CSS 变量 + `100dvh` + 移动端抽屉侧栏/底部输入区；亮暗两套 token；服务端默认外观（跟随系统/亮/暗）作用于登录页与新浏览器 |
@@ -237,6 +238,8 @@ npm run dev:web      # Vite, :5173，已代理 /api 与 /ws
 
 transcript 只保存附件的 `id/name/mimeType/size/kind`，不保存文件字节；刷新后图片通过公开的随机 capability URL 回放（无需登录），非图片仍要求登录 Cookie 并强制下载。单条最多 5 个、单文件默认 10 MB、总计 20 MB，可在环境变量里调整。完整链路、存储格式、安全边界和限制见 [附件链路](docs/ATTACHMENTS.md)。
 
+Agent 工具返回的图片（例如用 Read 读取 PNG）走独立链路：字节保存在 `data/tool-images`，transcript 只存描述符，工具卡显示缩略图并可在页内 lightbox 预览。详见 [工具结果图片、文本预览与运行中追加](docs/TOOL-IMAGES.md)。
+
 ### Web 原生命令
 
 CLI 的 `/model` 在终端里通常只返回一段 `Current model: … Available: …` 的 synthetic 文本；Web 控制台把这些系统配置命令改为原生 UI：
@@ -304,6 +307,7 @@ curl -fsS http://127.0.0.1:8010/api/health
 - [语音渠道调研与配置](docs/VOICE-ASR.md)
 - [中英文界面（i18n）](docs/I18N.md)
 - [附件链路：Web 上传到 Claude Code](docs/ATTACHMENTS.md)
+- [工具结果图片、文本预览与运行中追加](docs/TOOL-IMAGES.md)
 - [MCP / 子代理 / 插件：Web 管理范围](docs/EXTENSIONS.md)
 - [同类项目调研与取舍](docs/COMPETITIVE-RESEARCH.md)
 - [UI 布局与交互决策](docs/UI-DESIGN.md)

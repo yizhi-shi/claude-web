@@ -12,6 +12,7 @@ import { registerHttp } from './http.js';
 import { SessionManager } from './manager.js';
 import { initSecurity } from './security.js';
 import { SessionIndex } from './sessionIndex.js';
+import { ToolImageStore } from './toolImages.js';
 import { TranscriptStore } from './transcript.js';
 import { registerVoiceWs } from './voiceWs.js';
 import { registerWs } from './ws.js';
@@ -34,7 +35,8 @@ async function main(): Promise<void> {
   const index = new SessionIndex(config.dataDir);
   const transcript = new TranscriptStore(path.join(config.dataDir, 'transcripts'));
   const attachments = new AttachmentStore(path.join(config.dataDir, 'attachments'));
-  const manager = new SessionManager(index, transcript, attachments);
+  const toolImages = new ToolImageStore(path.join(config.dataDir, 'tool-images'));
+  const manager = new SessionManager(index, transcript, attachments, toolImages);
 
   registerHttp(app, manager);
   registerWs(app, manager);

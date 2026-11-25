@@ -1,4 +1,4 @@
-import { AttachmentStore } from './attachments.js';
+import { AttachmentStore, type ResolvedAttachment } from './attachments.js';
 import { config } from './config.js';
 import {
   findClaudeSession,
@@ -12,6 +12,7 @@ import { allRoots } from './workspaces.js';
 import { validateCwd } from './paths.js';
 import { ClaudeRuntime } from './runtime.js';
 import { SessionIndex } from './sessionIndex.js';
+import { ToolImageStore } from './toolImages.js';
 import {
   startSideQuestion,
   type SideQuestionCallbacks,
@@ -106,6 +107,7 @@ export class SessionManager {
     readonly index: SessionIndex,
     readonly transcript: TranscriptStore,
     readonly attachments: AttachmentStore,
+    readonly toolImages: ToolImageStore,
   ) {}
 
   hasLive(id: string): boolean {
@@ -149,7 +151,11 @@ export class SessionManager {
     if (!this.transcript.exists(id) && meta.claudeSessionId) {
       try {
         const lines = await readClaudeTranscript(meta.claudeSessionId);
-        const events = convertClaudeTranscript(lines);
+        // Historical tool-result images are stored the same way as live ones,
+        // so imported sessions also get clickable previews after replay.
+        const events = convertClaudeTranscript(lines, (content) =>
+          this.toolImages.saveFromContent(id, content),
+        );
         if (events.length > 0) {
           this.transcript.appendMany(id, events);
           if (!meta.title) {
@@ -189,6 +195,7 @@ export class SessionManager {
       model: meta.model,
       title: meta.title,
       transcript: this.transcript,
+      toolImages: this.toolImages,
       onMeta: (patch) => {
         this.index.update(id, patch);
       },
@@ -196,8 +203,87 @@ export class SessionManager {
     this.runtimes.set(id, runtime);
     runtime.subscribeState(() => this.emitState(id));
     runtime.start();
+    this.recoverShutdownMessages(id, runtime);
     this.emitState(id);
     return runtime;
+  }
+
+  /**
+   * A message appended during a running turn may still be sitting in the CLI
+   * queue when the service is stopped. The shutdown path marks it failed with
+   * the reason "服务关闭"; without recovery it would be lost and the browser
+   * would keep showing "未送达：服务关闭". On the next runtime start, re-send
+   * those messages with their original event id (so the bubble updates in
+   * place) and let the normal uuid delivery acknowledgement clear the chip.
+   *
+   * Only messages explicitly marked queued are recovered, and only when the
+   * last state is a shutdown failure. A user-requested stop or an ordinary
+   * process exit is not retried automatically.
+   */
+  private recoverShutdownMessages(id: string, runtime: ClaudeRuntime): void {
+    if (!runtime.isAlive()) return;
+    const events = this.transcript.readWindow(id, { tail: true, limit: 4000, compact: true });
+    interface Pending {
+      text: string;
+      attachmentIds: string[];
+      queued: boolean;
+      failedReason?: string;
+      delivered: boolean;
+    }
+    const pending = new Map<string, Pending>();
+    for (const event of events) {
+      if (event.type === 'user.message') {
+        pending.set(event.id, {
+          text: event.text,
+          attachmentIds: (event.attachments ?? []).map((attachment) => attachment.id),
+          queued: event.queued === true,
+          delivered: false,
+        });
+        continue;
+      }
+      if (event.type === 'user.message.retrying') {
+        const item = pending.get(event.id);
+        if (item) {
+          item.failedReason = undefined;
+          item.delivered = false;
+        }
+        continue;
+      }
+      if (event.type === 'user.message.delivered') {
+        const item = pending.get(event.id);
+        if (item) {
+          item.failedReason = undefined;
+          item.delivered = true;
+        }
+        continue;
+      }
+      if (event.type === 'user.message.failed') {
+        const item = pending.get(event.id);
+        if (item) {
+          item.failedReason = event.reason;
+          item.delivered = false;
+        }
+      }
+    }
+
+    for (const [eventId, item] of pending) {
+      if (!item.queued || item.delivered || item.failedReason !== '服务关闭') continue;
+      let resolved: ResolvedAttachment[] = [];
+      if (item.attachmentIds.length > 0) {
+        try {
+          resolved = this.attachments.resolve(id, item.attachmentIds);
+        } catch {
+          // The text is still worth recovering if an attachment disappeared.
+        }
+      }
+      if (!item.text.trim() && resolved.length === 0) continue;
+      try {
+        runtime.sendUserMessage(item.text, resolved, { id: eventId, recovered: true });
+      } catch {
+        // A stopped runtime or a transient enqueue failure leaves the failed
+        // marker in place; do not take the whole session down at startup.
+      }
+    }
   }
 
   createSession(input: {

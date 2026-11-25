@@ -30,6 +30,14 @@ export interface AttachmentRef {
   kind: 'image' | 'file';
 }
 
+/** An image returned by a tool; bytes are fetched from the session endpoint. */
+export interface ToolImageRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface EmailChallenge {
   challengeId: string;
   emailHint: string;
@@ -220,6 +228,8 @@ export type UiEvent =
     })
   | (EventBase & { type: 'user.message.delivered'; id: string })
   | (EventBase & { type: 'user.message.failed'; id: string; reason?: string })
+  /** A message lost to a service shutdown is being re-sent after restart. */
+  | (EventBase & { type: 'user.message.retrying'; id: string })
   | (EventBase & {
       type: 'assistant.message';
       messageId: string;
@@ -244,6 +254,7 @@ export type UiEvent =
       content: string;
       isError?: boolean;
       structured?: unknown;
+      images?: ToolImageRef[];
     })
   | (EventBase & {
       type: 'permission.request';

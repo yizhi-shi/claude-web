@@ -1,7 +1,7 @@
 # 架构与不变量
 
 > 状态: current
-> 最后核对: 2026-11-24
+> 最后核对: 2026-11-25
 > 事实源: `server/src/`、`web/src/`、`agent-python` 无关；Claude Code CLI 与 Agent SDK 的运行时契约以本机 `claude --version` 和 `@anthropic-ai/claude-agent-sdk` 类型为准
 > 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [附件](ATTACHMENTS.md) · [扩展](EXTENSIONS.md) · [Roadmap](ROADMAP.md)
 
@@ -37,6 +37,7 @@ data/
   sessions.json      Web 会话索引
   transcripts/       Web 侧 UI 事件（每会话一个 JSONL）
   attachments/       用户附件（每会话一个目录，文件与元数据均 0600）
+  tool-images/       工具结果图片（每会话一个目录，文件与元数据均 0600）
   voice.json         语音渠道与密钥（0600）
 ```
 
@@ -75,8 +76,8 @@ data/
 UI 只消费稳定事件，不直接解析 SDK 原始消息：
 
 - `session.init` / `session.status` / `session.meta`
-- `user.message`（`queued` 表示发送时回合仍在运行）
-- `user.message.delivered` / `user.message.failed`（排队消息在回合边界确认或停止时失败）
+- `user.message`（`queued` 表示发送时回合仍在运行；发给 SDK 的消息使用同一 UUID）
+- `user.message.delivered` / `user.message.failed` / `user.message.retrying`（CLI 回显 UUID 即确认；用户停止写失败；服务重启自动重发关服时未确认的追加消息）
 - `assistant.delta`（文本/思考增量） / `assistant.message`（final blocks）
 - `tool.result`
 - `permission.request` / `permission.resolved`
@@ -147,6 +148,8 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 ```
 
 附件按会话隔离，磁盘名由服务端随机生成；客户端永远不传路径。图片只允许 PNG/JPEG/GIF/WebP，SVG 作为普通文件强制下载。详见 [附件链路](ATTACHMENTS.md)。
+
+工具结果里的 image block 走独立链路：`ToolImageStore` 落盘到 `data/tool-images`，transcript 只存描述符，浏览器经需登录的会话端点读取；见 [工具结果图片](TOOL-IMAGES.md)。
 
 ## 安全边界
 

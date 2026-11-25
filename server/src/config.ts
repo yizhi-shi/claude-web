@@ -66,7 +66,7 @@ export const config = {
 };
 
 export function ensureDataDirs(): void {
-  for (const dir of ['', 'transcripts', 'sessions', 'attachments']) {
+  for (const dir of ['', 'transcripts', 'sessions', 'attachments', 'tool-images']) {
     fs.mkdirSync(path.join(config.dataDir, dir), { recursive: true, mode: 0o700 });
   }
 }
@@ -116,6 +116,6 @@ export function childEnv(): Record<string, string> {
     if (value === undefined || drop.has(key)) continue;
     env[key] = value;
   }
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.12.0';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.13.0';
   return env;
 }
