@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { ApiError, api } from '../api';
 import AppShell from '../components/AppShell.vue';
 import Icon from '../components/Icon.vue';
+import UpdateCard from '../components/UpdateCard.vue';
 import VoiceSettings from '../components/VoiceSettings.vue';
 import { locale, setLocale, t, translateServerMessage } from '../i18n';
 import {
@@ -721,6 +722,8 @@ onMounted(() => {
             <code class="data-path">{{ appConfig?.dataDir ?? '—' }}</code>
           </div>
         </section>
+
+        <UpdateCard />
 
         <VoiceSettings class="settings-voice" />
 

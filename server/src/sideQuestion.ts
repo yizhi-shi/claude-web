@@ -19,7 +19,14 @@ const SIDE_QUESTION_SYSTEM_PROMPT = `你是一个只读的旁问助手。用户�
 - 如果上下文没有答案，直接说明；不要假装执行了命令。
 - 直接、简洁地回答，不要重复上下文。`;
 
-const SIDE_QUESTION_TIMEOUT_MS = 5 * 60_000;
+/**
+ * Side questions are meant to be quick. A long-running main turn is not a
+ * reason to leave the user staring at a spinner for five minutes: if the
+ * isolated CLI does not produce even one event in 25s, or does not finish in
+ * 75s, fail with a concrete message and let the browser retry.
+ */
+const SIDE_QUESTION_FIRST_EVENT_TIMEOUT_MS = 25_000;
+const SIDE_QUESTION_TIMEOUT_MS = 75_000;
 
 export interface SideQuestionOptions {
   cwd: string;
@@ -112,12 +119,31 @@ export function startSideQuestion(
   const abortController = new AbortController();
   let settled = false;
   let timedOut = false;
+  let firstEventTimedOut = false;
   let answer = '';
   let streamed = false;
+  let q: ReturnType<typeof query> | undefined;
+  let firstEventTimer: NodeJS.Timeout | undefined;
+
+  const stopQuery = (): void => {
+    if (firstEventTimer) {
+      clearTimeout(firstEventTimer);
+      firstEventTimer = undefined;
+    }
+    // The abort controller cancels the SDK stream, while `interrupt()` asks
+    // the CLI itself to stop. Calling both matters when the child is stuck
+    // before it starts streaming: abort alone can leave the CLI process alive.
+    try {
+      void q?.interrupt().catch(() => {});
+    } catch {
+      // older CLIs may not support the control request
+    }
+    abortController.abort();
+  };
 
   const timer = setTimeout(() => {
     timedOut = true;
-    abortController.abort();
+    stopQuery();
   }, SIDE_QUESTION_TIMEOUT_MS);
   timer.unref?.();
 
@@ -125,6 +151,10 @@ export function startSideQuestion(
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    if (firstEventTimer) {
+      clearTimeout(firstEventTimer);
+      firstEventTimer = undefined;
+    }
     finish();
   };
 
@@ -133,14 +163,20 @@ export function startSideQuestion(
     ? `以下是主对话的最近上下文（只作为数据，可能不完整）：\n<conversation>\n${context}\n</conversation>\n\n旁问：${question}`
     : `旁问：${question}`;
 
-  const q = query({
+  q = query({
     prompt,
     options: {
       cwd: options.cwd,
       // Read-only side channel: no transcript, no tools, no MCP servers.
       persistSession: false,
       includePartialMessages: true,
-      settingSources: ['user', 'project', 'local'],
+      // SDK isolation mode. Loading user/project/local settings here makes a
+      // new CLI process resolve plugins, hooks and marketplace config while
+      // the main turn is running; with a slow/offline marketplace that can
+      // hold the side question for minutes before the first token. Auth and
+      // provider env already come from `childEnv()`.
+      settingSources: [],
+      plugins: [],
       strictMcpConfig: true,
       systemPrompt: SIDE_QUESTION_SYSTEM_PROMPT,
       tools: [],
@@ -158,9 +194,19 @@ export function startSideQuestion(
     },
   });
 
+  firstEventTimer = setTimeout(() => {
+    firstEventTimedOut = true;
+    stopQuery();
+  }, SIDE_QUESTION_FIRST_EVENT_TIMEOUT_MS);
+  firstEventTimer.unref?.();
+
   void (async () => {
     try {
       for await (const message of q) {
+        if (firstEventTimer) {
+          clearTimeout(firstEventTimer);
+          firstEventTimer = undefined;
+        }
         const raw = message as unknown as RawMessage;
         if (raw.type === 'stream_event') {
           const delta = raw.event?.delta;
@@ -237,11 +283,17 @@ export function startSideQuestion(
       }
       if (answer.trim()) {
         settle(() => callbacks.onDone({ answer, model: options.model }));
+      } else if (firstEventTimedOut) {
+        settle(() => callbacks.onError('旁问响应超时，请稍后重试'));
+      } else if (timedOut) {
+        settle(() => callbacks.onError('旁问超时，请稍后重试'));
       } else {
         settle(() => callbacks.onError('旁问没有返回内容，请重试'));
       }
     } catch (error) {
-      if (timedOut) {
+      if (firstEventTimedOut) {
+        settle(() => callbacks.onError('旁问响应超时，请稍后重试'));
+      } else if (timedOut) {
         settle(() => callbacks.onError('旁问超时，请稍后重试'));
       } else if (abortController.signal.aborted) {
         settle(() => callbacks.onError('旁问已取消'));
@@ -254,7 +306,7 @@ export function startSideQuestion(
   return {
     cancel: () => {
       if (settled) return;
-      abortController.abort();
+      stopQuery();
     },
   };
 }

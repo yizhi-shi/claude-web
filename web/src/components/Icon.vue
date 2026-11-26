@@ -54,6 +54,7 @@ const paths: Record<string, string> = {
   mail: 'M4 4h16v16H4zM4 6l8 6 8-6',
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6',
   save: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2ZM7 3v6h8V3M7 21v-7h10v7',
+  download: 'M12 3v12M7 10l5 5 5-5M5 21h14',
   volume: 'M11 5 6 9H2v6h4l5 4V5ZM19 9a5 5 0 0 1 0 6M22 6a9 9 0 0 1 0 12',
   play: 'M6 4l14 8-14 8Z',
   pause: 'M8 5v14M16 5v14',

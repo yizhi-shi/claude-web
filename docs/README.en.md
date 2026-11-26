@@ -16,7 +16,7 @@ For full bilingual user-facing documents, see:
 
 ### [Architecture and invariants](ARCHITECTURE.md) (Chinese)
 
-Explains the core split: the browser only renders and captures input, while the session process, event log and approval state live on the server. Includes the component map, session lifecycle, event model, permission modes, the invariants that must not be broken, and the voice/attachment/security boundaries.
+Explains the core split: the browser only renders and captures input, while the session process, event log and approval state live on the server. Includes the component map, session lifecycle, event model, permission modes, the invariants that must not be broken, and the voice/attachment/update/security boundaries.
 
 ### [Core implementation](IMPLEMENTATION.md) (Chinese)
 
@@ -36,7 +36,11 @@ Why the Web UI manages MCP status, reconnect and session-scoped enable/disable, 
 
 ### [Deployment guide](DEPLOYMENT.md) (Chinese)
 
-Manual and agent-assisted installation: prerequisites, user-level install, first login, service management, upgrades, reverse proxy/HTTPS, voice and attachment storage, uninstall, troubleshooting and security recommendations.
+Manual and agent-assisted installation: prerequisites, release vs source install, first login, service management, upgrades and rollback, reverse proxy/HTTPS, voice and attachment storage, uninstall, troubleshooting and security recommendations.
+
+### [Release packaging and system updates](UPDATER.md) (Chinese)
+
+Immutable release tarballs, platform-specific bundles, Ed25519-signed `latest.json`, release layout (`releases/<version>` + `current` symlink), the standalone systemd updater, the Settings update button, staging preflight/health checks, rollback, install/update environment variables, and the smoke tests. Updates never overwrite the running process; production `git pull` and flat in-place updates are explicitly not the supported path.
 
 ### [Voice recognition](VOICE-ASR.md) (Chinese)
 
@@ -44,7 +48,7 @@ Provider research and implementation for whole-utterance transcription and real-
 
 ### [UI design and interaction decisions](UI-DESIGN.md) (Chinese)
 
-Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, voice provider tabs), tool-result image thumbnails/lightbox and new-tab text preview, diff/code readability, the language switch, and accessibility details.
+Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, full-width system update, voice provider tabs), tool-result image thumbnails/lightbox and new-tab text preview, diff/code readability, the language switch, and accessibility details.
 
 ### [VS Code extension feature parity](FEATURE-PARITY.md) (Chinese)
 
@@ -52,7 +56,7 @@ Capability-by-capability comparison with the VS Code Claude Code extension, plus
 
 ### [Roadmap](ROADMAP.md) (Chinese)
 
-What is already available, known limitations, next priorities and product principles. Includes the lack of quota/cleanup for attachment and tool-image storage, and the bounded shutdown-recovery window for appended messages. Checkpoints/rewind, file tree/editor, Git panel and multi-agent orchestration are intentionally deferred.
+What is already available, known limitations, next priorities and product principles. Includes release packaging/system updates, the lack of quota/cleanup for attachment and tool-image storage, and the bounded shutdown-recovery window for appended messages. Checkpoints/rewind, file tree/editor, Git panel and multi-agent orchestration are intentionally deferred.
 
 ### [Competitive research](COMPETITIVE-RESEARCH.md) (Chinese)
 

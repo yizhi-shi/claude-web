@@ -22,6 +22,9 @@ npm start                   # 跑已构建的 dist/server（需要 web/dist 已�
 npm run set-password -- <用户名> <新密码>
 npm run upstream            # 打印本机 CLI / SDK / VSCode 插件版本
 npm run check-secrets       # 扫描当前树里的已知 secret 模式
+npm run package:release     # 构建并打包签名 release（默认自带生产依赖）
+./install.sh --release      # 安装预构建 release（不执行 npm/build）
+node scripts/update/claude-web-update.mjs status   # 独立更新器状态
 ```
 
 - 开发时同时开 `dev:server` 和 `dev:web`；只开 Vite 不会启动 API。
@@ -34,6 +37,9 @@ npm run check-secrets       # 扫描当前树里的已知 secret 模式
   node .smoke/extensions-smoke.mjs
   node .smoke/voice-live-mock.mjs
   node .smoke/interrupt-test.mjs
+  node .smoke/update-smoke.mjs
+  node .smoke/side-question-test.mjs
+  node .smoke/new-session-path-test.mjs
   ```
   多数脚本会自己启动临时服务、临时数据和端口；少数是依赖外部服务/凭证的一次性探测，运行前先读脚本头注释。浏览器脚本需要 Playwright Core + 系统 Chrome；真实 CLI 测试需要已登录的 `claude`，并可能消耗模型额度。
 - 安全重启用户服务用 `scripts/restart-service.sh`（可加 `--build` 或 `--defer N`）。不要在由该服务托管的会话里直接 `systemctl --user restart claude-web`，那会杀掉当前对话的 CLI 进程。
@@ -94,7 +100,7 @@ data/
 
 ## 文档与发布
 
-- `docs/ARCHITECTURE.md`、`IMPLEMENTATION.md`、`ATTACHMENTS.md`、`VOICE-ASR.md`、`EXTENSIONS.md`、`I18N.md` 是专项事实源；改行为时同步对应文档和 `README.md` / `CHANGELOG.md`。
+- `docs/ARCHITECTURE.md`、`IMPLEMENTATION.md`、`ATTACHMENTS.md`、`VOICE-ASR.md`、`EXTENSIONS.md`、`I18N.md`、`UPDATER.md` 是专项事实源；改行为时同步对应文档和 `README.md` / `CHANGELOG.md`。
 - **文档双语（强制）**：
   - 入口文档成对维护：`README.md` ↔ `README.en.md`、`SECURITY.md` ↔ `SECURITY.zh-CN.md`、`CONTRIBUTING.md` ↔ `CONTRIBUTING.zh-CN.md`；改一份必须同步另一份，并保留顶部语言切换。
   - 设计文档以中文为事实源；修改 `docs/*.md` 时必须同步更新 `docs/README.en.md` 中对应的英文摘要；新增设计文档必须加摘要条目。

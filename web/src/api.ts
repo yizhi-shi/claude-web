@@ -12,6 +12,8 @@ import type {
   SessionRuntimeState,
   SessionSummary,
   StoredEvent,
+  UpdateJobView,
+  UpdateStatusView,
   VoiceConfigView,
   VoiceProviderId,
   VoiceTestResult,
@@ -173,6 +175,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  updateStatus: () => request<UpdateStatusView>('/api/update/status'),
+  updateCheck: () =>
+    request<UpdateStatusView>('/api/update/check', { method: 'POST' }),
+  updateApply: (payload: { version?: string; force?: boolean }) =>
+    request<UpdateJobView>('/api/update/apply', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateRollback: () =>
+    request<UpdateJobView>('/api/update/rollback', { method: 'POST' }),
   createSession: (payload: {
     cwd: string;
     permissionMode?: PermissionMode;

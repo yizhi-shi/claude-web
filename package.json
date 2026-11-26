@@ -1,6 +1,6 @@
 {
   "name": "claude-web",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted web console for Claude Code (sessions, streaming chat, tool approvals)",
@@ -14,6 +14,8 @@
     "build:web": "vite build --config web/vite.config.ts",
     "build": "npm run build:server && npm run build:web",
     "start": "node dist/server/index.js",
+    "package:release": "npm run build && node scripts/package-release.mjs",
+    "update": "node scripts/update/claude-web-update.mjs",
     "set-password": "node scripts/set-password.mjs",
     "disable-2fa": "node scripts/disable-2fa.mjs",
     "upstream": "node scripts/check-upstream.mjs",

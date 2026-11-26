@@ -168,11 +168,27 @@ export function registerWs(app: FastifyInstance, manager: SessionManager): void 
                   completed = true;
                   sideRequests.delete(requestId);
                   sendJson(socket, { type: 'side.done', requestId, ...result });
+                  audit(
+                    'side.question.done',
+                    {
+                      id: sessionId,
+                      requestId,
+                      ok: true,
+                      chars: result.answer.length,
+                      durationMs: result.durationMs,
+                    },
+                    req.ip,
+                  );
                 },
                 onError: (errorText) => {
                   completed = true;
                   sideRequests.delete(requestId);
                   sendJson(socket, { type: 'side.error', requestId, message: errorText });
+                  audit(
+                    'side.question.done',
+                    { id: sessionId, requestId, ok: false, error: errorText.slice(0, 200) },
+                    req.ip,
+                  );
                 },
               });
               if (closed) {

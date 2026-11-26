@@ -15,6 +15,36 @@ function envNumber(value: string | undefined, fallback: number): number {
 const appRoot = process.cwd();
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(appRoot, 'data'));
 
+function readAppVersion(): string {
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8'),
+    ) as { version?: unknown };
+    return typeof parsed.version === 'string' && parsed.version ? parsed.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const appVersion = readAppVersion();
+
+function splitList(value: string | undefined, fallback: string[]): string[] {
+  const items = (value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : fallback;
+}
+
+const defaultFeedUrl = 'https://github.com/yizhi-shi/claude-web/releases/latest/download';
+const updateRoot = path.resolve(process.env.UPDATE_ROOT || appRoot);
+const updateProxyUrl = (
+  process.env.UPDATE_PROXY_URL ||
+  process.env.HTTPS_PROXY ||
+  process.env.https_proxy ||
+  ''
+).trim();
+
 const PERMISSION_MODES = new Set([
   'default',
   'acceptEdits',
@@ -31,6 +61,7 @@ function defaultPermissionMode(): string {
 
 export const config = {
   appRoot,
+  appVersion,
   host: process.env.HOST || '0.0.0.0',
   port: envNumber(process.env.PORT, 8010),
   dataDir,
@@ -63,10 +94,38 @@ export const config = {
   geminiLiveUrl: (process.env.GEMINI_LIVE_URL || '').trim(),
   geminiLiveProxyToken: (process.env.GEMINI_LIVE_PROXY_TOKEN || '').trim(),
   geminiLiveModel: (process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live').trim(),
+
+  // Self-update. The server only triggers a separate systemd oneshot unit;
+  // it never replaces its own files. See docs/UPDATER.md.
+  updateMode: (process.env.UPDATE_MODE || 'auto').toLowerCase(),
+  updateRoot,
+  updateFeedUrls: splitList(process.env.UPDATE_FEED_URLS || process.env.UPDATE_FEED_URL, [
+    defaultFeedUrl,
+  ]),
+  updateChannel: (process.env.UPDATE_CHANNEL || 'stable').trim(),
+  updateProxyUrl,
+  updateRequireSignature: envBool(process.env.UPDATE_REQUIRE_SIGNATURE, true),
+  updatePublicKeyFile: path.resolve(
+    process.env.UPDATE_PUBLIC_KEY_FILE ||
+      (fs.existsSync(path.join(updateRoot, 'bin', 'update-public-key.pem'))
+        ? path.join(updateRoot, 'bin', 'update-public-key.pem')
+        : path.join(appRoot, 'deploy', 'update-public-key.pem')),
+  ),
+  updatePublicKeyInline: process.env.UPDATE_PUBLIC_KEY || '',
+  updateServiceName: (process.env.UPDATE_SERVICE_NAME || 'claude-web-update.service').trim(),
+  updateWebService: (process.env.UPDATE_WEB_SERVICE || 'claude-web.service').trim(),
+  updateSystemdScope: (process.env.UPDATE_SYSTEMD_SCOPE ||
+    (process.env.XDG_RUNTIME_DIR ? 'user' : 'system')) as 'user' | 'system',
+  updateStartCommand: (process.env.UPDATE_START_COMMAND || '').trim(),
+  updateCheckTtlMs: envNumber(process.env.UPDATE_CHECK_TTL_MINUTES, 60) * 60_000,
+  updateHealthUrl: (
+    process.env.UPDATE_HEALTH_URL || `http://127.0.0.1:${envNumber(process.env.PORT, 8010)}/api/health`
+  ).trim(),
+  updateKeepReleases: envNumber(process.env.UPDATE_KEEP_RELEASES, 3),
 };
 
 export function ensureDataDirs(): void {
-  for (const dir of ['', 'transcripts', 'sessions', 'attachments', 'tool-images']) {
+  for (const dir of ['', 'transcripts', 'sessions', 'attachments', 'tool-images', 'updates']) {
     fs.mkdirSync(path.join(config.dataDir, dir), { recursive: true, mode: 0o700 });
   }
 }
@@ -116,6 +175,6 @@ export function childEnv(): Record<string, string> {
     if (value === undefined || drop.has(key)) continue;
     env[key] = value;
   }
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'claude-web/0.13.0';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = `claude-web/${appVersion}`;
   return env;
 }

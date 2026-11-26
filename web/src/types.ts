@@ -378,6 +378,51 @@ export interface WorkspaceConfigView {
 
 export interface StoredEvent extends UiEvent {}
 
+export type UpdateInstallMode = 'release' | 'flat' | 'git' | 'off' | 'unsupported';
+
+export interface UpdateReleaseView {
+  version: string;
+  channel: string;
+  publishedAt?: string;
+  notesUrl?: string;
+  breaking: boolean;
+  minVersion?: string;
+  platform: string;
+  size: number;
+  sha256: string;
+  includesNodeModules: boolean;
+}
+
+export interface UpdateJobView {
+  id?: string;
+  action: 'apply' | 'rollback';
+  phase: string;
+  targetVersion?: string;
+  previousVersion?: string;
+  progress?: number;
+  message?: string;
+  error?: string;
+  startedAt?: string;
+  updatedAt?: string;
+  finishedAt?: string;
+}
+
+export interface UpdateStatusView {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  installMode: UpdateInstallMode;
+  canCheck: boolean;
+  canApply: boolean;
+  disabledReason?: string;
+  channel: string;
+  checkedAt: string | null;
+  release: UpdateReleaseView | null;
+  activeSessions: number;
+  job: UpdateJobView | null;
+  lastResult: UpdateJobView | null;
+}
+
 export type VoiceProviderId = 'gemini' | 'openai' | 'volcengine' | 'browser';
 
 export interface VoiceProviderView {

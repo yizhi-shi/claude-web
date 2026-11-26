@@ -1,0 +1,19 @@
+# Claude Code Web standalone updater (systemd --user example).
+#
+# install.sh --release writes the real unit with absolute paths and enables it
+# only on demand (the web server starts it after writing request.json). Keep
+# this unit separate from claude-web.service so stopping the web service does
+# not kill the updater that is switching releases.
+[Unit]
+Description=Claude Code Web updater
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/you/.local/share/claude-web
+EnvironmentFile=/home/you/.local/share/claude-web/data/claude-web.env
+ExecStart=/usr/bin/node /home/you/.local/share/claude-web/bin/claude-web-update.mjs apply --request /home/you/.local/share/claude-web/data/updates/request.json
+TimeoutStartSec=30min
+
+# Do not add PartOf=claude-web.service: the updater must survive the stop/start
+# of the web service it is updating.

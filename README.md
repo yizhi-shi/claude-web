@@ -51,7 +51,8 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 | 语音输入 | 手机/免手操作时快速输入 | 麦克风按钮直接开始/结束听写；默认整段 WebM 上传转写，也可开启实时流式边说边写。渠道在「设置 → 语音识别」配置一次。支持 Gemini 3.5 Transcribe / Live、OpenAI 兼容（官方 Realtime 或分段实时；OpenAI/Groq/SiliconFlow/本地 faster-whisper）、字节火山引擎流式 WebSocket、浏览器内置 |
 | 多端布局 / 亮暗主题 | 手机和电脑都要好用 | Vue 3 + CSS 变量 + `100dvh` + 移动端抽屉侧栏/底部输入区；亮暗两套 token；服务端默认外观（跟随系统/亮/暗）作用于登录页与新浏览器 |
 | 中英文界面 | 中文/英文用户都能直接使用 | `web/src/i18n.ts` 内置中文/English 字典；首次跟随浏览器语言，按浏览器持久化；登录页、侧栏底部、设置 → 外观均可切换；日期/状态/错误等统一走 `t()` |
-| 干净安装 | 一台 Linux 设备快速上线 | `install.sh` 默认用户级安装到 `~/.local/share/claude-web`，构建后注册 `systemd --user` 并 `enable-linger`；也支持 `--system` 安装到 `/opt` |
+| 干净安装 | 一台 Linux 设备快速上线 | `install.sh --release` 安装签名发布包到 `~/.local/share/claude-web`，注册 `systemd --user` 并 `enable-linger`；也支持 `--system` 安装到 `/opt`。源码安装仍可用 `--from-dir` |
+| 系统更新 | 长期部署不想手工升级 | 设置页“检查更新 / 立即更新 / 回滚”；发布包走版本目录 + `current` 软链，独立 systemd updater 下载、验签、预启动检查、原子切换和失败回滚 |
 | 跟随 VSCode 插件 | 插件升级后不漏功能 | `docs/FEATURE-PARITY.md` 维护能力矩阵；`scripts/check-upstream.mjs` 输出本机 CLI / SDK / 插件版本，按清单复核 CLI 与 SDK 类型 |
 
 更细的架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；实现机制见 [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)。
@@ -81,13 +82,21 @@ Claude Code Web 把交互层搬到浏览器，并把**会话进程留在服务�
 
 ## 快速开始
 
-### 推荐：用户级干净安装
+### 推荐：用户级发布包安装
 
-前置条件：Linux、Node.js 20+、npm、git、已安装并登录的 `claude` CLI。
+前置条件：Linux、Node.js 20+、curl、git、已安装并登录的 `claude` CLI。发布包自带生产依赖，目标机不需要 npm 或构建工具。
 
 ```bash
 git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
 cd ~/claude-web-src
+./install.sh --release
+```
+
+安装后可在「设置 → 系统更新」检查、安装和回滚版本；机制与签名见 [docs/UPDATER.md](docs/UPDATER.md)。
+
+源码安装（开发）：
+
+```bash
 ./install.sh --from-dir .
 ```
 
@@ -114,8 +123,11 @@ sudo ./install.sh --system --dir /opt/claude-web --user "$SUDO_USER"
 ```bash
 systemctl --user status claude-web
 journalctl --user -u claude-web -f
-# 从服务之外的终端/Claude Code 窗口构建并重启；脚本会拒绝在服务托管的会话里直接重启
+# 源码安装：从服务之外的终端/Claude Code 窗口构建并重启；脚本会拒绝在服务托管的会话里直接重启
 ./scripts/restart-service.sh --build
+# 发布包安装：检查/回滚
+node ~/.local/share/claude-web/bin/claude-web-update.mjs check
+node ~/.local/share/claude-web/bin/claude-web-update.mjs rollback
 ```
 
 卸载（保留数据）：
@@ -278,10 +290,10 @@ MCP 面板只读取当前会话的状态并做会话内启停/重连，不发送
 ```text
 server/src        Fastify + Agent SDK + 会话运行时
 web/src           Vue 3 单页应用（登录/会话/聊天/设置）
-scripts           密码重置、上游版本检查
-deploy            systemd / nginx 模板
-docs              架构、功能对照、语音、调研、发布策略
-install.sh        用户级/系统级干净安装
+scripts           密码重置、上游版本检查、发布打包、独立更新器
+deploy            systemd / nginx 模板、更新签名公钥
+docs              架构、功能对照、语音、调研、发布策略、系统更新
+install.sh        用户级/系统级干净安装（--release / --from-dir）
 uninstall.sh      卸载
 ```
 
@@ -302,6 +314,7 @@ curl -fsS http://127.0.0.1:8010/api/health
 - [架构与不变量](docs/ARCHITECTURE.md)
 - [核心实现说明](docs/IMPLEMENTATION.md)
 - [部署教程（人工 / Agent）](docs/DEPLOYMENT.md)
+- [发布包与系统更新](docs/UPDATER.md)
 - [Roadmap](docs/ROADMAP.md)
 - [VSCode 插件能力对照](docs/FEATURE-PARITY.md)
 - [语音渠道调研与配置](docs/VOICE-ASR.md)

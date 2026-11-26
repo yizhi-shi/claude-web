@@ -34,6 +34,7 @@ import {
 } from './security.js';
 import { updateWorkspaces, workspaceConfig } from './workspaces.js';
 import type { PermissionDecision } from './types.js';
+import { UpdateManager } from './update.js';
 import { errorMessage, HttpError } from './util.js';
 import { getVersions } from './versions.js';
 import {
@@ -118,6 +119,15 @@ function isPublicAttachmentRequest(req: FastifyRequest): boolean {
 }
 
 export function registerHttp(app: FastifyInstance, manager: SessionManager): void {
+  const updater = new UpdateManager({
+    activeSessions: async () => {
+      const items = await manager.listSummaries(1000);
+      return items.filter(
+        (item) => item.status === 'running' || item.status === 'waiting_permission',
+      ).length;
+    },
+  });
+
   app.addHook('onRequest', async (req, reply) => {
     const origin = req.headers.origin;
     if (origin && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
@@ -170,7 +180,11 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
     return payload;
   });
 
-  app.get('/api/health', async () => ({ ok: true, time: new Date().toISOString() }));
+  app.get('/api/health', async () => ({
+    ok: true,
+    time: new Date().toISOString(),
+    version: config.appVersion,
+  }));
 
   app.get('/api/auth/status', async () => ({
     setupRequired: isSetupRequired(),
@@ -369,6 +383,39 @@ export function registerHttp(app: FastifyInstance, manager: SessionManager): voi
       permissionTimeoutMinutes: Math.round(config.permissionTimeoutMs / 60_000),
       dataDir: config.dataDir,
     };
+  });
+
+  authed(app, 'GET', '/api/update/status', async () => updater.status());
+
+  authed(app, 'POST', '/api/update/check', async (req, _reply, user) => {
+    const status = await updater.check(true);
+    audit('update.check', { by: user.username, latest: status.latestVersion }, req.ip);
+    return status;
+  });
+
+  authed(app, 'GET', '/api/update/job', async () => updater.status());
+
+  authed(app, 'POST', '/api/update/apply', async (req, reply, user) => {
+    const body = req.body as
+      | { version?: unknown; force?: unknown }
+      | undefined;
+    const job = await updater.apply({
+      version: typeof body?.version === 'string' ? body.version : undefined,
+      force: body?.force === true,
+      user: user.username,
+    });
+    audit(
+      'update.apply',
+      { by: user.username, version: job.targetVersion, force: body?.force === true },
+      req.ip,
+    );
+    return reply.code(202).send(job);
+  });
+
+  authed(app, 'POST', '/api/update/rollback', async (req, reply, user) => {
+    const job = await updater.rollback({ user: user.username });
+    audit('update.rollback', { by: user.username, version: job.targetVersion }, req.ip);
+    return reply.code(202).send(job);
   });
 
   authed(app, 'GET', '/api/voice/config', async () => maskedVoiceConfig());

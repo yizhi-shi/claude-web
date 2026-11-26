@@ -867,6 +867,28 @@ pre {
   font-size: 10.5px;
 }
 
+.version-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.version-link:hover {
+  color: var(--muted);
+}
+
+.update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .shell-body {
   display: flex;
   flex: 1;
@@ -1238,6 +1260,10 @@ pre {
   color: var(--faint);
 }
 
+.path-form:focus-within {
+  border-color: var(--accent);
+}
+
 .path-form input {
   flex: 1;
   min-width: 0;
@@ -1247,6 +1273,44 @@ pre {
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 11.5px;
+}
+
+.path-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 0;
+  padding: 0 12px 8px 34px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.path-hint.error {
+  color: var(--danger);
+}
+
+.picker-selected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.picker-selected code {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-selected.warning {
+  color: var(--danger);
 }
 
 .dir-list {
@@ -3873,6 +3937,7 @@ pre {
     'account appearance'
     'security security'
     'workspaces runtime'
+    'update update'
     'voice voice'
     'notes notes';
   gap: 18px;
@@ -3897,6 +3962,10 @@ pre {
 
 .settings-runtime {
   grid-area: runtime;
+}
+
+.settings-update {
+  grid-area: update;
 }
 
 .settings-voice {
@@ -4689,6 +4758,7 @@ pre {
       'security'
       'workspaces'
       'runtime'
+      'update'
       'voice'
       'notes';
     align-items: start;

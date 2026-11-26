@@ -66,7 +66,7 @@ export function getVersions(): VersionInfo {
     ),
     vscodeExtension: readExtensionVersion(),
     node: process.version.replace(/^v/, ''),
-    claudeWeb: readPackageVersion(path.join(config.appRoot, 'package.json')),
+    claudeWeb: config.appVersion,
   };
   return cached;
 }

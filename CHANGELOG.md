@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0 — 2026-11-26
+
+- New-session workspace picker: typing a path now previews the directory tree live (280 ms debounce, stale-response guard, IME handling). Invalid paths keep the previous tree, show an inline hint and disable “Start session”; Enter canonicalizes, Escape restores the last valid path, and the selected path is shown explicitly. Both Chinese and English strings were added.
+- `/btw` side questions are now isolated with `settingSources: []` / no plugins, so user/project plugins or marketplace loading no longer delays the first token while the main turn is running. Added a 25 s first-event timeout, a 75 s total timeout, `Query.interrupt()` + abort on cancel, and completion audit events.
+- Added signed release packaging (`scripts/package-release.mjs`, `latest.json` + Ed25519 signature + sha256) and a release installer (`install.sh --release`, `scripts/install-release.sh`) with `releases/<version>` + `current` and a standalone updater under `bin/`.
+- Added Settings → System update: check, update, progress, active-session confirmation, post-restart recovery and rollback. The server never replaces its own files; `claude-web-update.service` downloads, verifies, preflights in staging, stops the web service, atomically switches the symlink, restarts and rolls back on failure. APIs: `GET /api/update/status`, `POST /api/update/check`, `POST /api/update/apply`, `GET /api/update/job`, `POST /api/update/rollback`.
+- Version metadata now comes from `package.json` (`config.appVersion`); removed the hardcoded `0.13.0` fallbacks. `/api/health` now includes the version.
+- Added `docs/UPDATER.md`, bilingual README/DEPLOYMENT updates, `.env.example` update variables, a systemd updater example, and smoke tests: `update-smoke.mjs`, `new-session-path-test.mjs`; the existing side-question E2E passes with the new isolation.
+
 ## 0.13.0 — 2026-11-25
 
 - Tool-result images are no longer discarded as `[图片]`. Image blocks returned by `Read`, screenshot tools or MCP tools are stored under `data/tool-images/<sessionId>/` (0600, sidecar metadata), while the transcript stores only a descriptor. Tool cards render thumbnails that open an in-page lightbox (click outside or `Escape` closes, plus open-original), and the image endpoint requires login and is session-scoped. Imported Claude history uses the same pipeline.

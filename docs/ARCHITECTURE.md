@@ -1,7 +1,7 @@
 # 架构与不变量
 
 > 状态: current
-> 最后核对: 2026-11-25
+> 最后核对: 2026-11-26
 > 事实源: `server/src/`、`web/src/`、`agent-python` 无关；Claude Code CLI 与 Agent SDK 的运行时契约以本机 `claude --version` 和 `@anthropic-ai/claude-agent-sdk` 类型为准
 > 关联: [功能对照](FEATURE-PARITY.md) · [核心实现](IMPLEMENTATION.md) · [语音](VOICE-ASR.md) · [附件](ATTACHMENTS.md) · [扩展](EXTENSIONS.md) · [Roadmap](ROADMAP.md)
 
@@ -151,6 +151,24 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
 
 工具结果里的 image block 走独立链路：`ToolImageStore` 落盘到 `data/tool-images`，transcript 只存描述符，浏览器经需登录的会话端点读取；见 [工具结果图片](TOOL-IMAGES.md)。
 
+## 更新链路
+
+```text
+设置页“立即更新”
+  → POST /api/update/apply（登录 + 运行中会话确认）
+  → 写 data/updates/request.json
+  → systemctl start claude-web-update.service（独立 oneshot，不在 Web 进程内）
+  → feed latest.json + Ed25519 验签
+  → 下载 tarball → sha256 → tar 安全检查 → staging
+  → staging 临时 DATA_DIR + 回环端口健康检查
+  → stop claude-web.service
+  → 原子切换 current 软链
+  → start claude-web.service → 真实 /api/health
+  → 成功写 installed.json；失败切回上一版本
+```
+
+Web 进程永远不替换自己正在运行的文件；版本目录、`current` 软链、`bin/claude-web-update.mjs` 和 `data/` 的关系见 [系统更新](UPDATER.md)。git 开发 checkout 和平铺安装不启用这条自动更新路径。
+
 ## 安全边界
 
-控制台 = 服务运行用户的远程终端。认证、HTTPS、反向代理限流、工作区白名单是外围；默认 `default` 权限是内层。公网部署建议叠加统一身份网关。
+控制台 = 服务运行用户的远程终端。认证、HTTPS、反向代理限流、工作区白名单是外围；默认 `default` 权限是内层。公网部署建议叠加统一身份网关。自动更新还额外要求 HTTPS、sha256、Ed25519 验签和 tar 解压校验。

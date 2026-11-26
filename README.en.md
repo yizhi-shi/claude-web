@@ -51,7 +51,8 @@ Claude Code Web moves the interaction layer into the browser while keeping the *
 | Voice input | Fast input on a phone or hands-free | The mic starts/stops dictation directly; the default is whole-utterance WebM upload, with optional real-time streaming. Configure the provider once in Settings → Voice. Supports Gemini 3.5 Transcribe / Live, OpenAI-compatible (official Realtime or segmented live; OpenAI/Groq/SiliconFlow/local faster-whisper), Volcengine streaming WebSocket and the browser SpeechRecognition |
 | Responsive layout / themes | Work well on desktop and phone | Vue 3 + CSS variables + `100dvh` + mobile drawer sidebar/bottom composer; light and dark token sets; server-wide default appearance (system/light/dark) applies to the login page and new browsers |
 | Chinese/English UI | Both Chinese and English users can use the console directly | `web/src/i18n.ts` ships a Chinese/English dictionary; first visit follows the browser language and the choice is stored per browser; switch from the login card, sidebar footer or Settings → Appearance; dates/status/errors go through `t()` |
-| Clean installation | Get a Linux machine online quickly | `install.sh` installs to `~/.local/share/claude-web` by default, builds, registers a `systemd --user` service and enables lingering; `--system` installs under `/opt` |
+| Clean installation | Get a Linux machine online quickly | `install.sh --release` installs a signed release to `~/.local/share/claude-web`, registers a `systemd --user` service and enables lingering; `--system` installs under `/opt`. Source installs still use `--from-dir` |
+| System updates | Long-lived deployments without manual upgrades | Settings exposes check / update / rollback. Release installs use versioned directories plus a `current` symlink; a standalone systemd updater downloads, verifies, preflights, switches and rolls back on failure |
 | Follow the VS Code extension | Avoid missing features after an extension upgrade | `docs/FEATURE-PARITY.md` tracks the capability matrix; `scripts/check-upstream.mjs` prints local CLI/SDK/extension versions for review |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for implementation details. For English summaries of the Chinese design documents, see [docs/README.en.md](docs/README.en.md).
@@ -81,13 +82,21 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and [docs/IMPL
 
 ## Quick start
 
-### Recommended: clean user-level install
+### Recommended: clean user-level release install
 
-Prerequisites: Linux, Node.js 20+, npm, git, and an installed and logged-in `claude` CLI.
+Prerequisites: Linux, Node.js 20+, curl, git, and an installed and logged-in `claude` CLI. The release bundles production dependencies, so the target does not need npm or a build toolchain.
 
 ```bash
 git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
 cd ~/claude-web-src
+./install.sh --release
+```
+
+After installation, use Settings → System update to check, install and roll back releases. See [docs/UPDATER.md](docs/UPDATER.md) for the mechanism and signing.
+
+Source install (development):
+
+```bash
 ./install.sh --from-dir .
 ```
 
@@ -114,9 +123,12 @@ Service management:
 ```bash
 systemctl --user status claude-web
 journalctl --user -u claude-web -f
-# Build and restart from a terminal/Claude Code window outside the service.
+# Source install: build and restart from a terminal/Claude Code window outside the service.
 # The script refuses to restart from a session hosted by the service itself.
 ./scripts/restart-service.sh --build
+# Release install: check / roll back
+node ~/.local/share/claude-web/bin/claude-web-update.mjs check
+node ~/.local/share/claude-web/bin/claude-web-update.mjs rollback
 ```
 
 Uninstall (keep data):
@@ -279,10 +291,10 @@ This console is equivalent to a **remote terminal for the service user**:
 ```text
 server/src        Fastify + Agent SDK + session runtime
 web/src           Vue 3 SPA (login/sessions/chat/settings)
-scripts           Password reset, upstream version check
-deploy            systemd / nginx templates
-docs              Architecture, feature parity, voice, research, release strategy
-install.sh        Clean user-level/system-level install
+scripts           Password reset, upstream version check, release packaging, standalone updater
+deploy            systemd / nginx templates, update signing public key
+docs              Architecture, feature parity, voice, research, release strategy, system updates
+install.sh        Clean user-level/system-level install (--release / --from-dir)
 uninstall.sh      Uninstall
 ```
 
@@ -303,6 +315,7 @@ Before publishing, at minimum run the builds above, the health check and one rea
 - [Architecture and invariants](docs/ARCHITECTURE.md) (Chinese)
 - [Core implementation notes](docs/IMPLEMENTATION.md) (Chinese)
 - [Deployment guide (manual / agent)](docs/DEPLOYMENT.md) (Chinese)
+- [Release packaging and system updates](docs/UPDATER.md) (Chinese)
 - [Roadmap](docs/ROADMAP.md) (Chinese)
 - [VS Code extension feature parity](docs/FEATURE-PARITY.md) (Chinese)
 - [Voice provider research and configuration](docs/VOICE-ASR.md) (Chinese)

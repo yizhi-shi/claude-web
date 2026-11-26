@@ -1,6 +1,6 @@
 import { reactive, ref } from 'vue';
 import { ApiError, api } from './api';
-import type { AppConfig, SessionSummary } from './types';
+import type { AppConfig, SessionSummary, UpdateStatusView } from './types';
 
 export const authState = reactive<{
   user: { username: string } | null;
@@ -36,6 +36,18 @@ export async function loadConfig(force = false): Promise<AppConfig | null> {
 
 export const sessions = ref<SessionSummary[]>([]);
 export const sessionsLoading = ref(false);
+
+export const updateStatus = ref<UpdateStatusView | null>(null);
+
+export async function refreshUpdateStatus(force = false): Promise<UpdateStatusView | null> {
+  if (updateStatus.value && !force) return updateStatus.value;
+  try {
+    updateStatus.value = await api.updateStatus();
+  } catch {
+    // The update card shows its own error when the user opens Settings.
+  }
+  return updateStatus.value;
+}
 
 export async function refreshSessions(): Promise<void> {
   if (sessionsLoading.value) return;

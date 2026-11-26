@@ -1,7 +1,7 @@
 # 部署教程（人工 / Agent）
 
 > 状态: current
-> 最后核对: 2026-11-25
+> 最后核对: 2026-11-26
 > 关联: [README](../README.md) · [架构](ARCHITECTURE.md)
 
 ## 人工部署
@@ -14,7 +14,40 @@
 - 已安装并登录的 `claude` CLI（`claude --version` 可用）
 - 可选：`ffmpeg`（火山引擎语音渠道）
 
-### 用户级安装（推荐）
+### 用户级安装：发布包（推荐）
+
+安装预构建、带签名的 release，不在目标机执行 npm 或构建：
+
+```bash
+git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
+cd ~/claude-web-src
+./install.sh --release
+```
+
+- 安装目录：`~/.local/share/claude-web`
+- 版本目录：`~/.local/share/claude-web/releases/<version>`
+- 当前版本：`current -> releases/<version>`
+- 数据目录：`~/.local/share/claude-web/data`
+- 独立更新器：`~/.local/share/claude-web/bin/claude-web-update.mjs`
+- 服务：`systemctl --user` + `loginctl enable-linger`
+- 新会话权限：`default`（每次敏感操作询问）
+
+指定版本或镜像源：
+
+```bash
+./install.sh --release --version 0.14.0
+./install.sh --release --feed https://mirror.example.com/claude-web
+```
+
+已存在的平铺安装（非 git）可以迁移：
+
+```bash
+./install.sh --release --migrate
+```
+
+发布包安装默认启用设置页的“检查更新 / 立即更新 / 回滚”，详见 [系统更新](UPDATER.md)。
+
+### 用户级安装：源码（开发）
 
 ```bash
 git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
@@ -22,13 +55,7 @@ cd ~/claude-web-src
 ./install.sh --from-dir .
 ```
 
-默认：
-
-- 安装目录：`~/.local/share/claude-web`
-- 数据目录：`~/.local/share/claude-web/data`
-- 监听：`0.0.0.0:8010`
-- 服务：`systemctl --user` + `loginctl enable-linger`
-- 新会话权限：`default`（每次敏感操作询问）
+源码安装会在目标机执行 `npm ci` 和 `npm run build`，不启用自动更新；适合开发和调试。
 
 常用参数：
 
@@ -68,6 +95,29 @@ journalctl --user -u claude-web -f
 
 ### 升级
 
+发布包安装（推荐）：
+
+- 打开「设置 → 系统更新」，点“检查更新”，再点“立即更新”；
+- 更新器会下载、验签、预启动检查、切换版本并重启服务；
+- 有运行中会话时会要求二次确认；更新会中断这些会话。
+
+命令行等价操作：
+
+```bash
+node ~/.local/share/claude-web/bin/claude-web-update.mjs check
+node ~/.local/share/claude-web/bin/claude-web-update.mjs apply
+node ~/.local/share/claude-web/bin/claude-web-update.mjs status
+```
+
+回滚：
+
+```bash
+node ~/.local/share/claude-web/bin/claude-web-update.mjs rollback
+# 或页面：设置 → 系统更新 → 回滚上一版本
+```
+
+源码安装仍可手工升级：
+
 ```bash
 cd ~/.local/share/claude-web
 git pull --ff-only
@@ -76,7 +126,7 @@ npm run build
 systemctl --user restart claude-web
 ```
 
-`data/` 不会被覆盖；升级前可备份该目录。
+`data/` 不会被覆盖；升级前可备份该目录。发布包的详细机制、签名、feed 和故障处理见 [系统更新](UPDATER.md)。
 
 ### 反向代理与 HTTPS
 

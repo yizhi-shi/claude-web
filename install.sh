@@ -25,6 +25,24 @@ SYSTEM=0
 FROM_DIR=""
 RUN_USER=""
 
+# --release forwards to the prebuilt-release installer; it never runs npm or a
+# build on the target machine.
+for arg in "$@"; do
+  if [ "$arg" = "--release" ]; then
+    SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    RELEASE_SCRIPT="$SELF_DIR/scripts/install-release.sh"
+    [ -x "$RELEASE_SCRIPT" ] || {
+      echo "scripts/install-release.sh not found next to install.sh" >&2
+      exit 1
+    }
+    forward=()
+    for value in "$@"; do
+      [ "$value" = "--release" ] || forward+=("$value")
+    done
+    exec "$RELEASE_SCRIPT" "${forward[@]}"
+  fi
+done
+
 usage() {
   cat <<'EOF'
 Usage: ./install.sh [options]
@@ -34,6 +52,11 @@ Usage: ./install.sh [options]
   --host <addr>            listen address (default 0.0.0.0)
   --permission-mode <mode> default permission mode for new sessions
                            (default | acceptEdits | plan | bypassPermissions | dontAsk | auto)
+  --release                install a prebuilt, signed release (no npm/build)
+  --version <version>      with --release: install a specific version
+  --feed <url>             with --release: release feed URL
+  --public-key <file>      with --release: Ed25519 public key
+  --migrate                with --release: convert an existing flat install
   --from-dir <path>        install from an existing checkout instead of cloning
   --repo <url>             git repository (default public repo)
   --branch <name>          git branch (default main)

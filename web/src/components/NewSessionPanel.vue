@@ -13,6 +13,11 @@ const router = useRouter();
 
 const listing = ref<DirListing | null>(null);
 const pathInput = ref('');
+/** Raw text that produced the current listing; may be `~` or a trailing slash. */
+const selectedInput = ref('');
+const pathHint = ref('');
+const pathState = ref<'idle' | 'resolving' | 'invalid'>('idle');
+const pathComposing = ref(false);
 const projects = ref<ProjectSummary[]>([]);
 const loading = ref(false);
 const submitting = ref(false);
@@ -20,6 +25,19 @@ const creatingFolder = ref(false);
 const error = ref('');
 const permissionMode = ref<PermissionMode>('default');
 const model = ref('');
+
+const PATH_DEBOUNCE_MS = 280;
+let pathTimer: number | undefined;
+let browseToken = 0;
+let pathFocused = false;
+
+const pathReady = computed(
+  () =>
+    !!listing.value &&
+    !loading.value &&
+    pathState.value === 'idle' &&
+    pathInput.value.trim() === selectedInput.value.trim(),
+);
 
 const modes = computed(() => appConfig.value?.permissionModes ?? []);
 const currentModel = computed(() => appConfig.value?.models.current ?? '');
@@ -35,18 +53,111 @@ const descriptions: Record<string, string> = {
   bypassPermissions: '跳过所有确认，非常危险',
 };
 
-async function browse(target?: string): Promise<void> {
+function pathErrorMessage(err: unknown): string {
+  return err instanceof ApiError ? translateServerMessage(err.message) : t('无法读取目录');
+}
+
+function cancelPendingBrowse(): void {
+  if (pathTimer) {
+    window.clearTimeout(pathTimer);
+    pathTimer = undefined;
+  }
+  // Invalidate any request already in flight. It may still finish on the
+  // server, but it must not overwrite the tree the user is now looking at.
+  browseToken += 1;
+}
+
+async function browse(
+  target?: string,
+  options: { live?: boolean } = {},
+): Promise<void> {
+  if (options.live) cancelPendingBrowse();
+  const token = ++browseToken;
+  const requested = target?.trim() ?? '';
   loading.value = true;
+  pathState.value = 'resolving';
+  pathHint.value = '';
   error.value = '';
   try {
-    const result = await api.listDirs(target);
+    const result = await api.listDirs(requested || undefined);
+    if (token !== browseToken) return;
     listing.value = result;
-    pathInput.value = result.path;
+    pathState.value = 'idle';
+    if (options.live && pathFocused) {
+      // Keep exactly what the user typed while the field is focused; show the
+      // canonical path as a hint when `~` or a symlink changed it.
+      selectedInput.value = requested;
+      pathHint.value = result.path !== requested ? t('实际路径：{path}', { path: result.path }) : '';
+    } else {
+      pathInput.value = result.path;
+      selectedInput.value = result.path;
+      pathHint.value = '';
+    }
   } catch (err) {
-    error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('无法读取目录');
+    if (token !== browseToken) return;
+    pathState.value = 'invalid';
+    pathHint.value = pathErrorMessage(err);
+    // A live/Enter lookup must never replace the current tree with an empty
+    // list or a page-level error: the user is probably still typing.
   } finally {
-    loading.value = false;
+    if (token === browseToken) loading.value = false;
   }
+}
+
+function schedulePathBrowse(): void {
+  if (pathComposing.value) return;
+  cancelPendingBrowse();
+  const value = pathInput.value.trim();
+  if (!value) {
+    pathState.value = 'idle';
+    pathHint.value = '';
+    loading.value = false;
+    return;
+  }
+  pathState.value = 'resolving';
+  pathHint.value = '';
+  pathTimer = window.setTimeout(() => {
+    pathTimer = undefined;
+    void browse(value, { live: true });
+  }, PATH_DEBOUNCE_MS);
+}
+
+function onPathInput(event: Event): void {
+  const target = event.target as HTMLInputElement | null;
+  if (target) pathInput.value = target.value;
+  schedulePathBrowse();
+}
+
+function onPathFocus(): void {
+  pathFocused = true;
+}
+
+function onPathBlur(): void {
+  pathFocused = false;
+  if (pathState.value === 'idle' && listing.value) {
+    pathInput.value = listing.value.path;
+    selectedInput.value = listing.value.path;
+    pathHint.value = '';
+  }
+}
+
+function onPathKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return;
+  cancelPendingBrowse();
+  pathInput.value = listing.value?.path ?? '';
+  selectedInput.value = listing.value?.path ?? '';
+  pathState.value = 'idle';
+  pathHint.value = '';
+  loading.value = false;
+}
+
+function onCompositionStart(): void {
+  pathComposing.value = true;
+}
+
+function onCompositionEnd(): void {
+  pathComposing.value = false;
+  schedulePathBrowse();
 }
 
 async function loadProjects(): Promise<void> {
@@ -59,7 +170,7 @@ async function loadProjects(): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  if (!listing.value || submitting.value) return;
+  if (!listing.value || submitting.value || !pathReady.value) return;
   submitting.value = true;
   error.value = '';
   try {
@@ -78,11 +189,18 @@ async function start(): Promise<void> {
   }
 }
 
+function openPath(target: string): void {
+  cancelPendingBrowse();
+  pathFocused = false;
+  void browse(target);
+}
+
 function goUp(): void {
-  if (listing.value?.parent) void browse(listing.value.parent);
+  if (listing.value?.parent) openPath(listing.value.parent);
 }
 
 function submitPath(): void {
+  cancelPendingBrowse();
   const value = pathInput.value.trim();
   if (value) void browse(value);
 }
@@ -95,7 +213,7 @@ async function createFolder(): Promise<void> {
   error.value = '';
   try {
     const result = await api.mkdir(listing.value.path, name.trim());
-    await browse(result.path);
+    openPath(result.path);
   } catch (err) {
     error.value = err instanceof ApiError ? translateServerMessage(err.message) : t('创建文件夹失败');
   } finally {
@@ -134,7 +252,7 @@ onMounted(async () => {
           class="project-chip"
           :class="{ active: project.cwd === listing?.path }"
           :title="project.cwd"
-          @click="browse(project.cwd)"
+          @click="openPath(project.cwd)"
         >
           {{ prettyPath(project.cwd) }}
         </button>
@@ -148,7 +266,21 @@ onMounted(async () => {
         </button>
         <form class="path-form" @submit.prevent="submitPath">
           <Icon name="folder" :size="15" />
-          <input v-model="pathInput" spellcheck="false" :aria-label="t('工作目录')" :disabled="loading" />
+          <input
+            v-model="pathInput"
+            spellcheck="false"
+            :aria-label="t('工作目录')"
+            :aria-invalid="pathState === 'invalid'"
+            :aria-busy="pathState === 'resolving'"
+            :aria-describedby="pathHint ? 'workspace-path-hint' : undefined"
+            @input="onPathInput"
+            @focus="onPathFocus"
+            @blur="onPathBlur"
+            @keydown="onPathKeydown"
+            @compositionstart="onCompositionStart"
+            @compositionend="onCompositionEnd"
+          />
+          <span v-if="pathState === 'resolving' || loading" class="spinner tiny" aria-hidden="true" />
         </form>
         <button
           class="icon-btn"
@@ -160,12 +292,24 @@ onMounted(async () => {
         </button>
       </div>
 
+      <p
+        v-if="pathHint"
+        id="workspace-path-hint"
+        class="path-hint"
+        :class="{ error: pathState === 'invalid' }"
+        role="status"
+        aria-live="polite"
+      >
+        <Icon :name="pathState === 'invalid' ? 'alert' : 'info'" :size="13" />
+        {{ pathHint }}
+      </p>
+
       <div class="dir-list" :class="{ loading }">
         <button
           v-for="entry in listing?.entries ?? []"
           :key="entry.path"
           class="dir-row"
-          @click="browse(entry.path)"
+          @click="openPath(entry.path)"
         >
           <span class="dir-icon" :class="{ git: entry.isGit }">
             <Icon :name="entry.isGit ? 'gitBranch' : 'folder'" :size="16" />
@@ -220,9 +364,15 @@ onMounted(async () => {
       </datalist>
     </label>
 
+    <p v-if="listing" class="picker-selected" :class="{ warning: !pathReady }">
+      <Icon name="folder" :size="13" />
+      {{ pathReady ? t('将在此创建会话：') : t('当前选中（上方路径未应用）：') }}
+      <code>{{ listing.path }}</code>
+    </p>
+
     <p v-if="error" class="form-error"><Icon name="alert" :size="15" />{{ error }}</p>
 
-    <button class="btn primary block start-btn" :disabled="!listing || submitting" @click="start">
+    <button class="btn primary block start-btn" :disabled="!pathReady || submitting" @click="start">
       <Icon name="play" :size="15" />
       {{ submitting ? t('创建中…') : t('开始会话') }}
     </button>

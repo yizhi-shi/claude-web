@@ -1,7 +1,7 @@
 # Roadmap
 
 > 状态: current
-> 最后核对: 2026-11-25
+> 最后核对: 2026-11-26
 > 关联: [功能对照](FEATURE-PARITY.md) · [架构](ARCHITECTURE.md) · [语音](VOICE-ASR.md)
 
 ## 已具备（v0.6）
@@ -28,6 +28,7 @@
 - 桌面/手机响应式、亮/暗/跟随系统；服务端默认外观
 - 中英文界面：中文/English 字典与切换，按浏览器持久化；登录页、侧栏、设置均可切换
 - 用户级/系统级安装脚本、systemd、卸载
+- 发布包与系统更新：`install.sh --release`、版本目录 + `current` 软链、Ed25519 签名 manifest、独立 systemd updater、设置页检查/更新/回滚
 
 ## 已知限制
 
@@ -37,6 +38,7 @@
 - 大历史默认加载最近 240 条，可手动加载更早。
 - `data/attachments` 与 `data/tool-images` 没有配额/过期清理；工具结果图片只支持 base64 image block，不代理 URL 图片。
 - 关服后追加消息的自动恢复只扫描最近 4,000 条可渲染事件，且只恢复 `queued` 且最后一次失败原因为「服务关闭」的消息。
+- 自动更新只支持 release 布局；git 开发 checkout 和平铺安装需要在页面提示后改用 `install.sh --release`（平铺可加 `--migrate`）。更新会短暂停止服务并中断运行中的会话；新版本若启动成功后运行一段时间才崩溃，需要人工回滚。
 
 ## 后续优先级
 

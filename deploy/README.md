@@ -20,7 +20,7 @@ Claude Code Web   0.0.0.0:8010
 
 ## 步骤
 
-1. 用 `install.sh` 在目标主机安装服务（默认 `~/.local/share/claude-web`）。
+1. 用 `install.sh --release` 在目标主机安装预构建发布包（默认 `~/.local/share/claude-web`）；开发和调试可用 `install.sh --from-dir .`。
 2. 如果服务只在局域网，直接访问 `http://<LAN-IP>:8010`。
 3. 如果走公网：
    - 反向代理到 `127.0.0.1:8010`（同机）或内网主机；
@@ -37,3 +37,4 @@ Claude Code Web   0.0.0.0:8010
 - 不要把 `data/` 暴露为静态目录。
 - `HOST=0.0.0.0` 是默认值；若只经过本机反代，可改为 `127.0.0.1`。
 - 服务运行用户必须能读取 `~/.claude` 和目标工作区目录。
+- 发布安装会写入独立的 `claude-web-update.service`（oneshot）；不要把它和 `claude-web.service` 合并，否则停止 Web 服务时更新器会被一起杀掉。示例见 `claude-web-update.service.example`，机制见 `docs/UPDATER.md`。

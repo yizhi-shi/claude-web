@@ -8,9 +8,11 @@ import {
   authState,
   loadConfig,
   refreshSessions,
+  refreshUpdateStatus,
   sessions,
   theme,
   toggleTheme,
+  updateStatus,
 } from '../store';
 import { formatRelative, prettyPath, statusLabel, statusTone } from '../utils';
 import Icon from './Icon.vue';
@@ -25,7 +27,12 @@ let pollTimer: number | undefined;
 
 const activeId = computed(() => (route.params.id as string | undefined) ?? '');
 const visibleSessions = computed(() => sessions.value.slice(0, 60));
-const version = computed(() => appConfig.value?.versions.claudeWeb ?? '0.13.0');
+const version = computed(() => appConfig.value?.versions.claudeWeb ?? '—');
+
+function goUpdates(): void {
+  mobileOpen.value = false;
+  void router.push({ path: '/settings', hash: '#update' });
+}
 
 function isActive(id: string): boolean {
   return activeId.value === id;
@@ -66,6 +73,7 @@ watch(
 onMounted(() => {
   void refreshSessions();
   void loadConfig();
+  void refreshUpdateStatus();
   pollTimer = window.setInterval(tick, 20_000);
   document.addEventListener('visibilitychange', tick);
 });
@@ -139,7 +147,19 @@ onUnmounted(() => {
           {{ loggingOut ? t('退出中…') : t('退出登录') }}
         </button>
         <div class="side-version">
-          <span>v{{ version }}</span>
+          <button
+            class="version-link"
+            type="button"
+            :title="
+              updateStatus?.updateAvailable
+                ? t('发现新版本 v{version}', { version: updateStatus.latestVersion ?? '' })
+                : t('检查系统更新')
+            "
+            @click="goUpdates"
+          >
+            v{{ version }}
+            <span v-if="updateStatus?.updateAvailable" class="update-dot" aria-hidden="true" />
+          </button>
           <span>{{ authState.user?.username }}</span>
         </div>
       </div>

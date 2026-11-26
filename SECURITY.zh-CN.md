@@ -45,5 +45,6 @@ Claude Code Web 以服务运行用户的身份运行本机 `claude` CLI。任何
 - 只有 PNG/JPEG/GIF/WebP 会被当作图片（刻意排除 SVG）。非图片文件强制使用 `application/octet-stream` + `Content-Disposition: attachment`；图片使用内联 disposition 和白名单 MIME。CSP + `nosniff` 进一步降低同源脚本执行风险。
 - Fastify 请求体上限为 18 MB；base64 膨胀后附件限制应保持在其之下。反向代理必须配置兼容的 `client_max_body_size`。
 - 上传文件不会做病毒扫描，其内容会进入模型上下文；请把附件视为不可信输入。
-- 旁问作为 fork 的、不持久化的查询运行，移除全部工具并拒绝所有工具请求；不写入主 transcript，并在请求 WebSocket 或会话停止时取消。
+- 旁问作为隔离的、不持久化的查询运行（`settingSources: []`、不加载插件），移除全部工具并拒绝所有工具请求；不写入主 transcript，并在请求 WebSocket 或会话停止时取消。首事件超时和总超时避免慢渠道/离线插件把面板卡死。
+- 自动更新是可选能力，git/平铺安装默认禁用。release 更新要求 HTTPS、SHA-256 和 Ed25519 签名 manifest，校验 tar 路径/类型/链接，先在 staging 预启动检查，再停止服务、原子切换 `current` 软链，失败自动回滚。Web 进程从不替换自己正在运行的文件；更新器作为独立 systemd oneshot 运行。前端不能提供 feed URL 或命令。
 - MCP 状态响应采用白名单：只包含服务器名称/状态/scope/source/服务器信息/错误/工具名和描述。MCP `config`、`env`、HTTP headers、命令路径和 token 永远不会发送到浏览器。启用/停用和重连只作用于当前 SDK 会话；Web UI 不修改 MCP 配置或 agent/插件文件。
