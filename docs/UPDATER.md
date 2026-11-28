@@ -32,17 +32,17 @@
 
 ## 2. 发布包
 
-`scripts/package-release.mjs` 从**脱敏后的公开导出树**构建：
+`scripts/package-release.mjs` 从当前源码树构建：
 
 ```bash
 npm run build
 node scripts/package-release.mjs \
   --out dist-release \
   --base-url https://github.com/yizhi-shi/claude-web/releases/download/v0.14.0 \
-  --sign-key .local-secrets/update-signing-key.pem
+  --sign-key /path/to/update-signing-key.pem
 ```
 
-默认生成自带生产依赖的包（约 180 MB，`linux-x64-gnu`）；`--no-deps` 生成约 2 MB 的应用包，安装/更新时在目标端执行 `npm ci --omit=dev`。稳定部署推荐默认的自带依赖包。
+`--sign-key` 只在发布正式版本时需要；本地构建可以省略，但默认更新器不会接受未签名的包。默认生成自带生产依赖的包（约 180 MB，`linux-x64-gnu`）；`--no-deps` 生成约 2 MB 的应用包，安装/更新时在目标端执行 `npm ci --omit=dev`。稳定部署推荐默认的自带依赖包。
 
 产物：
 
@@ -76,18 +76,18 @@ update-public-key.pem
 }
 ```
 
-`latest.json.sig` 是对 `latest.json` 原始字节的 Ed25519 签名。公钥在 `deploy/update-public-key.pem`，私钥只保存在开发机的 `.local-secrets/update-signing-key.pem`（0600，永不入库、不进入发布包）。
+`latest.json.sig` 是对 `latest.json` 原始字节的 Ed25519 签名。公钥在 `deploy/update-public-key.pem`，私钥只保存在维护者本机（`0600`），不随仓库或发布包分发。
 
 ## 3. 发布流水线
 
-私有树的 `scripts/publish.sh public` 在脱敏导出、提交、打 tag、推送之后：
+发布时从一份干净的源码树构建并签名：
 
-1. 在临时公开 clone 中执行 `npm ci`、`npm run build`；
-2. 执行 `scripts/package-release.mjs`，默认自带依赖；
-3. 用 `.local-secrets/update-signing-key.pem` 签名；
-4. `gh release create` / `gh release upload` 上传 tarball、`latest.json`、签名和公钥。
+1. 执行 `npm ci`、`npm run build`；
+2. 执行 `scripts/package-release.mjs`，默认自带生产依赖；
+3. 用与 `deploy/update-public-key.pem` 对应的私钥签名 `latest.json`；
+4. 通过 `gh release create` / `gh release upload` 上传 tarball、`latest.json`、签名和公钥。
 
-需要跳过自动发布会话时设置 `PUBLIC_SKIP_RELEASE=1`；只检查导出可设置 `PUBLIC_DRY_RUN=1`。
+发布前建议先跑一遍第 10 节的冒烟测试，确认验签、安装和回滚链路正常。
 
 ## 4. 安装与升级
 
@@ -216,7 +216,7 @@ node ~/.local/share/claude-web/bin/claude-web-update.mjs rollback
 - tar 解压拒绝绝对路径、`..`、越界软链和设备文件。
 - 发布包只包含静态运行文件，不执行包内脚本。
 - 更新接口要求登录，并记录 `update.check` / `update.apply` / `update.rollback` 审计。
-- 私有部署建议把 release 资产镜像到自己的 HTTPS 域名；不要在服务端长期保存 GitHub token。
+- 建议把 release 资产镜像到自己的 HTTPS 域名，并避免在服务端长期保存 GitHub token。
 
 ## 10. 冒烟测试
 

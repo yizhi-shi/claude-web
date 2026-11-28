@@ -147,7 +147,7 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
   → transcript 只写附件描述；历史经鉴权附件 URL 回放
 ```
 
-附件按会话隔离，磁盘名由服务端随机生成；客户端永远不传路径。图片只允许 PNG/JPEG/GIF/WebP，SVG 作为普通文件强制下载。详见 [附件链路](ATTACHMENTS.md)。
+附件按会话隔离，磁盘名由服务端随机生成；服务端不接受客户端提供的路径。图片只允许 PNG/JPEG/GIF/WebP，SVG 作为普通文件强制下载。详见 [附件链路](ATTACHMENTS.md)。
 
 工具结果里的 image block 走独立链路：`ToolImageStore` 落盘到 `data/tool-images`，transcript 只存描述符，浏览器经需登录的会话端点读取；见 [工具结果图片](TOOL-IMAGES.md)。
 
@@ -167,7 +167,7 @@ UI 只消费稳定事件，不直接解析 SDK 原始消息：
   → 成功写 installed.json；失败切回上一版本
 ```
 
-Web 进程永远不替换自己正在运行的文件；版本目录、`current` 软链、`bin/claude-web-update.mjs` 和 `data/` 的关系见 [系统更新](UPDATER.md)。git 开发 checkout 和平铺安装不启用这条自动更新路径。
+Web 进程不会替换自己正在运行的文件；版本目录、`current` 软链、`bin/claude-web-update.mjs` 和 `data/` 的关系见 [系统更新](UPDATER.md)。git 开发 checkout 和平铺安装不启用这条自动更新路径。
 
 ## 安全边界
 

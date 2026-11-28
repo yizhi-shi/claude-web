@@ -103,7 +103,7 @@
 - 服务端响应头必须包含 `Permissions-Policy: microphone=(self)`；写成 `microphone=()` 会在权限弹窗之前直接 `NotAllowedError`。
 - `data/voice.json`（0600）保存 provider 配置与密钥；页面 API 只返回 `hasApiKey` / `••••尾4位`。
 - 转写请求受登录与每分钟 60 次限流；审计只记录 provider、字节数、延迟，不记录音频与文本。
-- 不要把 `data/voice.json` 提交到 Git。公网部署时，语音 Key 是服务端资产，不要下发到浏览器。
+- `data/voice.json` 只保存在服务端。公网部署时，语音 Key 属于服务端资产，不应出现在页面或浏览器请求中。
 
 ## 新增渠道
 

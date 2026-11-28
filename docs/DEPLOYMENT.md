@@ -10,7 +10,7 @@
 
 - Linux（systemd 推荐）
 - Node.js 20+
-- npm、git
+- npm、git、curl
 - 已安装并登录的 `claude` CLI（`claude --version` 可用）
 - 可选：`ffmpeg`（火山引擎语音渠道）
 
@@ -156,7 +156,7 @@ systemctl --user restart claude-web
     ```
   - OpenAI 官方 Realtime 需要账号支持 `?intent=transcription`；其它 OpenAI 兼容服务默认用分段实时（静音断句 + HTTP 转写），也可填自定义 Realtime 网关地址。
   - 火山引擎实时复用 App ID / Access Key / Resource ID，直接连 `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel`，不需要 `ffmpeg`。
-- Key/Token 只在服务端 `data/voice.json`（0600）或服务环境变量里；不要写进 Git、README、截图。实时不可用时会自动回退到整段转写。
+- Key/Token 只保存在服务端 `data/voice.json`（0600）或服务环境变量中，不会下发给浏览器。截图和示例文档里请只使用占位符。实时不可用时会自动回退到整段转写。
 - 浏览器麦克风只在 HTTPS 或 localhost 下可用；公网部署请使用 HTTPS；反向代理需要允许 `/ws/voice` 的 WebSocket upgrade。
 
 ### 附件存储
@@ -208,12 +208,12 @@ cd ~/.local/share/claude-web
 验收标准：health 返回 ok、服务 active、端口 8010 在监听、首页可访问。
 ```
 
-如果 Agent 有 shell 权限，也可以直接让它执行 `./install.sh --from-dir .` 并读取输出；不要让 Agent 生成或记录管理员密码，首次密码应由人在浏览器里设置。
+如果 Agent 有 shell 权限，也可以直接让它执行 `./install.sh --from-dir .` 并读取输出。管理员密码应由人在浏览器里首次设置，不要交给 Agent 生成或记录。
 
 ## 安全建议
 
 - 默认 `default` 权限最安全；`bypassPermissions` 只用于个人可信设备。
 - 公网务必 HTTPS；控制台等价于服务运行用户的远程终端。
-- `data/` 包含账号、语音 Key、transcript，不能提交或公开。
+- `data/` 包含账号、语音 Key 和对话记录，请按敏感数据保护，并定期备份。
 - 定期备份 `data/`；升级前先备份。
 - 生产建议使用独立用户并限制 `ALLOWED_ROOTS`。

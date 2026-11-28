@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Reworked the public documentation into a more conventional open-source shape: a shorter bilingual README with grouped features, FAQ and security guidance; clearer SECURITY and CONTRIBUTING documents; a paired Chinese/English documentation index (`docs/README.md` / `docs/README.en.md`); and removal of internal-sounding repository-hygiene phrasing from user-facing docs.
+
 ## 0.14.0 — 2026-11-26
 
 - New-session workspace picker: typing a path now previews the directory tree live (280 ms debounce, stale-response guard, IME handling). Invalid paths keep the previous tree, show an inline hint and disable “Start session”; Enter canonicalizes, Escape restores the last valid path, and the selected path is shown explicitly. Both Chinese and English strings were added.

@@ -160,7 +160,7 @@ CLI 对未拦截命令返回的 assistant 消息可能带 `model: "<synthetic>"`
 - 上传：`POST /api/sessions/:id/attachments`（JSON base64）→ `data/attachments/<sessionId>/<uuid>.<ext>`，同时写一份同名 `.json` 元数据；目录 0700、文件 0600。服务端校验 base64、MIME、单文件大小与文件名（只保留 basename）。
 - 发送：WS `user.message` / HTTP messages 增加 `attachments: [id]`。服务端只接受当前会话已上传的 id，重新校验数量与总大小，再交给 `ClaudeRuntime`。
 - 进入模型：图片 → Messages API `image` content block（base64，png/jpeg/gif/webp）；≤64KB 的文本类文件 → 内联进 text block；其余文件 → 绝对路径清单，由 Claude 按需用 Read 工具读取。`user.message` 事件只存附件描述（id/name/mime/size/kind），不存文件字节。
-- 历史渲染：图片经 `GET /api/sessions/:id/attachments/:attachmentId` 加载；图片是刻意公开的 capability URL（随机会话 id + 随机附件 id，不要求登录），非图片仍要求 Cookie，并强制 `application/octet-stream` + `Content-Disposition: attachment`，避免同源 HTML/SVG 被执行。SVG 不作为 image block 发送。
+- 历史渲染：图片经 `GET /api/sessions/:id/attachments/:attachmentId` 加载；图片是有意公开的 capability URL（随机会话 id + 随机附件 id，不要求登录），非图片仍要求 Cookie，并强制 `application/octet-stream` + `Content-Disposition: attachment`，避免同源 HTML/SVG 被执行。SVG 不作为 image block 发送。
 - 限制：`MAX_ATTACHMENTS`（默认 5）、`MAX_ATTACHMENT_MB`（默认 10）、`MAX_TOTAL_ATTACHMENT_MB`（默认 20）；客户端先做一次同样的检查，服务端为准。Fastify `bodyLimit` 固定 18 MB，base64 膨胀后仍要能通过。
 - 失败语义：`manager.send()` 先 `AttachmentStore.resolve()` 再 `ensureRuntime()`，坏附件不会拉起 CLI；上传成功的文件不会因为移除 chip 自动删除（清理策略在 Roadmap）。
 

@@ -1,63 +1,61 @@
 # Claude Code Web
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+English | [简体中文](README.md)
+
+[![Release](https://img.shields.io/github/v/release/yizhi-shi/claude-web?label=release)](https://github.com/yizhi-shi/claude-web/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Agent%20SDK-22c55e)](https://docs.anthropic.com/en/docs/claude-code)
 
-[简体中文](README.md) | English
+A self-hosted web console for **Claude Code**. Sessions run on the server, so refreshing the page, closing the tab or switching to your phone never interrupts what Claude is working on.
 
-A self-hosted console for managing the local **Claude Code** from a browser. Sessions stay alive on the server, so refreshing the page, closing it, or switching to a phone never interrupts a running task.
+Built for personal Linux machines and trusted local networks. It listens on `0.0.0.0:8010` by default and asks you to create the administrator account on first visit.
 
-> Designed for a personal Linux machine or a trusted LAN. It listens on `0.0.0.0:8010` by default and asks you to create the administrator account on first launch.
+> Claude Code Web is at 0.x and moving quickly. Back up the `data/` directory before upgrading.
 
----
+## Why this exists
 
-## Why it exists
+Claude Code usually lives in a terminal or an IDE. Step away from the desk, check progress from your phone, or move to another machine mid-task, and the interaction breaks.
 
-Claude Code normally lives in a terminal or an IDE. When you leave the desk, want a quick look from your phone, or need to switch devices mid-task, the interaction breaks.
+Claude Code Web moves the interaction layer into the browser while keeping the session process on the server:
 
-Claude Code Web moves the interaction layer into the browser while keeping the **session process on the server**:
-
-- The page only *attaches* to a session; dropping the WebSocket does not stop Claude.
+- The page is just a view of a session; dropping the WebSocket does not stop Claude.
 - Reopening the page restores the running state, history, pending approvals and background tasks.
-- Multiple projects, session history, tool approvals, file diffs, slash commands/skills, `@` file references, image/file attachments, side questions (`/btw`) and voice input are supported.
-- History is paginated by renderable events, and scrolling to the top loads earlier messages. Messages sent during a running turn are added to the conversation immediately, marked as added, and confirmed when the CLI echoes their uuid; messages lost to a service shutdown are re-sent automatically.
-- One responsive layout for desktop and mobile, with light/dark themes.
+- One responsive layout for desktop and phone, with light, dark and system themes.
 
----
+It is not a browser terminal or a full IDE. The goal is to make Claude Code sessions easier to watch, approve and resume.
 
-## Features and implementation
+## Features
 
-| Feature | Problem it solves | Core implementation |
-|---|---|---|
-| First-run setup + login | Establish an access boundary before LAN/public use | Set the administrator on first launch; passwords are bcrypt-hashed in `data/auth.json`; HttpOnly + SameSite signed cookie; five consecutive failures lock the account for one hour, plus per-IP rate limiting; optional email-code second factor |
-| API authorization | Every data API must require a signed-in user | A global hook requires the login token for all `/api/*` routes except health, sign-in/email verification and image attachments; new routes fail closed by default |
-| Persistent sessions | Refreshing/closing the page must not kill the task | Each session has a server-side `ClaudeRuntime` that keeps the CLI process alive through the Agent SDK's streaming input; the browser WebSocket only subscribes to events and never owns the process |
-| Automatic recovery | Reopening the page should show a task that is still running | Events are persisted to `data/transcripts/<id>.jsonl`; reconnect replays from `lastSeq` and sends the current run state, active tools, pending approvals and background tasks |
-| Streaming conversation | Typewriter output and visible tool execution | SDK `includePartialMessages` yields text/thinking deltas, normalized into `assistant.delta` / `assistant.message` and pushed over WebSocket; the frontend renders Markdown and tool cards |
-| Permission approvals | Dangerous commands need human confirmation | The SDK `canUseTool` callback suspends the request and sends it to the browser; the UI shows the command or a file diff; the answer is allow once / allow session / deny, with automatic denial on timeout |
-| Interactive questions / plan approval | Claude must not stall when it needs a choice or plan approval | `AskUserQuestion` renders a single/multi-select card and returns answers through `updatedInput.answers`; `ExitPlanMode` shows the plan from the preceding assistant message and supports approve, keep planning and feedback. Pending items live in runtime state and survive refresh; questions appear even when the session default is allow-all |
-| Default allow-all mode | Personal trusted environments should not require a click for every tool | The UI selects `bypassPermissions`; because the CLI refuses `--dangerously-skip-permissions` as root, the server uses `default` mode plus a `canUseTool` auto-allow equivalent (tool calls are still recorded) |
-| Session history / resume | Reuse sessions that already exist in the terminal or VS Code | Scan `~/.claude/projects/*/*.jsonl`; normalize Claude transcripts into Web events; resume the same session; load only a recent window for large histories with a "load earlier" action |
-| History pagination / appended messages | History must survive refresh; messages sent during a run must be visible and must not be lost | History queries use `compact=1`, skipping token-level `assistant.delta` and paginating by message events; scrolling to the top auto-loads earlier messages. Messages sent during a turn enter the transcript immediately with `queued` and the CLI uuid; the server emits `user.message.delivered` as soon as the CLI echoes the uuid, `failed` on stop, and re-sends messages lost to a service shutdown |
-| Live execution state | Know what is running and for how long | Maintain an active-tool list from `tool_use` / `tool_result` / `tool_progress` / task events; show the current tool, elapsed time, background tasks, context usage, cost and compaction status |
-| Workspace configuration | Choose where a session runs | `ALLOWED_ROOTS` plus extra/default directories in `data/workspaces.json`; every cwd is realpath- and allowlist-validated; the picker can create folders |
-| Commands / skills / file references | Match the VS Code extension's input capabilities | Read `slash_commands` and `skills` from `system/init`; typing `/` opens the command/skill menu; typing `@` searches project files with `rg --files` and inserts a relative path. `/model`, `/context`, `/usage`, `/status`, `/permissions`, `/config`, `/help`, `/mcp`, `/agents` are handled by native Web panels; other commands go to the CLI |
-| System-command adaptation | CLI configuration output should not masquerade as Claude replies | `/model` and similar commands are handled by native panels; assistant messages with `model: "<synthetic>"` render as system notices without the `<synthetic>` model chip; empty `No response requested.` messages do not occupy the conversation |
-| MCP / subagent status | Know whether extensions are actually available | The `/mcp` panel shows MCP status, tools and errors for the current session, with reconnect and session-scoped enable/disable; `/agents` lists subagents read-only. Plugin marketplace, hooks and MCP auth remain CLI-managed; MCP env/headers/command paths are never sent to the browser |
-| Image / file attachments | Screenshots, logs and documents should not be retyped | Paste images, drag files or use the file picker; the server stores them under `data/attachments` (0600) and references them by id. On send, images become Anthropic `image` blocks, small text files are inlined, and other files are passed to Claude by absolute path; history renders thumbnails/file chips |
-| Tool-result images / text preview | Agent-read or generated images must not collapse to `[图片]`; intermediate output should be readable in the browser | Tool-result image blocks are stored under `data/tool-images` (0600) and transcripts keep only descriptors. Tool cards show thumbnails; clicking opens an in-page lightbox, and the original can open in a new tab. Tool text output opens as plain text in a new browser tab |
-| Side question (`/btw`) | Ask a quick question during a running task without interrupting it | The header opens a floating panel (bottom-right on desktop, bottom card on mobile); drag the top handle to resize, double-click to reset. The server builds a compact context from recent renderable events and runs an ephemeral, tool-less, non-persisted, non-resumed query. Answers never enter the main conversation; cancel is supported and cost is shown separately |
-| Voice input | Fast input on a phone or hands-free | The mic starts/stops dictation directly; the default is whole-utterance WebM upload, with optional real-time streaming. Configure the provider once in Settings → Voice. Supports Gemini 3.5 Transcribe / Live, OpenAI-compatible (official Realtime or segmented live; OpenAI/Groq/SiliconFlow/local faster-whisper), Volcengine streaming WebSocket and the browser SpeechRecognition |
-| Responsive layout / themes | Work well on desktop and phone | Vue 3 + CSS variables + `100dvh` + mobile drawer sidebar/bottom composer; light and dark token sets; server-wide default appearance (system/light/dark) applies to the login page and new browsers |
-| Chinese/English UI | Both Chinese and English users can use the console directly | `web/src/i18n.ts` ships a Chinese/English dictionary; first visit follows the browser language and the choice is stored per browser; switch from the login card, sidebar footer or Settings → Appearance; dates/status/errors go through `t()` |
-| Clean installation | Get a Linux machine online quickly | `install.sh --release` installs a signed release to `~/.local/share/claude-web`, registers a `systemd --user` service and enables lingering; `--system` installs under `/opt`. Source installs still use `--from-dir` |
-| System updates | Long-lived deployments without manual upgrades | Settings exposes check / update / rollback. Release installs use versioned directories plus a `current` symlink; a standalone systemd updater downloads, verifies, preflights, switches and rolls back on failure |
-| Follow the VS Code extension | Avoid missing features after an extension upgrade | `docs/FEATURE-PARITY.md` tracks the capability matrix; `scripts/check-upstream.mjs` prints local CLI/SDK/extension versions for review |
+**Sessions**
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for implementation details. For English summaries of the Chinese design documents, see [docs/README.en.md](docs/README.en.md).
+- Sessions stay alive on the server. Refresh the page, close the tab or switch devices, and the running state, history, pending approvals and background tasks come back.
+- Multiple workspaces, plus scanning and resuming existing Claude Code / VS Code sessions on the same machine.
+- History is paginated by renderable events; scrolling to the top loads earlier messages.
 
----
+**Chat and tools**
+
+- Streaming text and thinking, Markdown, syntax highlighting, tool cards, command output and file diffs.
+- The status strip shows the active tool, elapsed time, background tasks, context usage, cost and compaction state.
+- Permission approvals for once, this session or deny, with automatic denial on timeout.
+- Native panels for `AskUserQuestion` and plan approval (`ExitPlanMode`); pending questions survive a refresh.
+- Messages sent during a running turn appear immediately and are confirmed once the CLI echoes their UUID.
+- Images returned by tools render as thumbnails with an in-page lightbox; full tool output opens as plain text in a new tab.
+
+**Input**
+
+- `/` command and skill menu, `@` file references.
+- Paste, drag or pick files. Images go to the model as image blocks, small text files are inlined, and other files are passed by absolute path.
+- Voice input through Gemini, OpenAI-compatible services, Volcengine or the browser, with whole-utterance transcription and real-time streaming.
+- `/btw` side questions: ask something mid-task without interrupting the main conversation or writing to its history.
+
+**Interface and deployment**
+
+- Responsive desktop and mobile layout with light, dark and system themes.
+- Chinese and English UI, following the browser language on first visit and switchable at any time.
+- MCP status, reconnect and session-scoped enable/disable, plus a read-only subagent list.
+- User-level or system-level installation with a systemd service; release bundles ship production dependencies.
+- Release installs can check, install and roll back updates from Settings. Releases are Ed25519-signed and switched atomically.
 
 ## Screenshots
 
@@ -78,13 +76,20 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture and [docs/IMPL
   <img src="docs/screenshots/login-light.png" alt="Login page" width="49%" />
 </p>
 
-> Screenshots use sanitized demo data. Voice providers are configured once in Settings; the mic in the chat composer then starts dictation directly.
+> Screenshots use demo data and contain no real account information. Configure a voice provider once in Settings; the mic button in the composer then starts dictation directly.
 
 ## Quick start
 
-### Recommended: clean user-level release install
+### Requirements
 
-Prerequisites: Linux, Node.js 20+, curl, git, and an installed and logged-in `claude` CLI. The release bundles production dependencies, so the target does not need npm or a build toolchain.
+- Linux (systemd recommended)
+- Node.js 20+
+- git and curl
+- An installed and logged-in `claude` CLI (`claude --version` works)
+
+### Install from a release (recommended)
+
+The release bundle includes production dependencies, so the target machine does not need npm or a build toolchain.
 
 ```bash
 git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
@@ -92,23 +97,13 @@ cd ~/claude-web-src
 ./install.sh --release
 ```
 
-After installation, use Settings → System update to check, install and roll back releases. See [docs/UPDATER.md](docs/UPDATER.md) for the mechanism and signing.
-
-Source install (development):
-
-```bash
-./install.sh --from-dir .
-```
-
-For detailed manual and agent-assisted deployment, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-After installation, open:
+Then open:
 
 ```text
 http://<device-LAN-IP>:8010
 ```
 
-The first visit shows the "initialize administrator" page, where you choose your own username and password (there is no default password). Data lives in `~/.local/share/claude-web/data` and is ignored by Git.
+The first visit shows the "initialize administrator" page, where you choose your own username and password (there is no default password). Data lives in `~/.local/share/claude-web/data` and is created on first start. See [Release packaging and system updates](docs/UPDATER.md) for the version layout, `current` symlink and update mechanism.
 
 Common options:
 
@@ -118,26 +113,67 @@ Common options:
 sudo ./install.sh --system --dir /opt/claude-web --user "$SUDO_USER"
 ```
 
-Service management:
+### Install from source
+
+For development and debugging. This runs `npm ci` and `npm run build` on the target machine and does not enable automatic updates.
+
+```bash
+git clone https://github.com/yizhi-shi/claude-web.git ~/claude-web-src
+cd ~/claude-web-src
+./install.sh --from-dir .
+```
+
+### First login and account
+
+1. Open `http://<device-IP>:8010`; the first visit shows "Initialize administrator".
+2. Usernames allow letters, digits and `.` `_` `@` `-`, 1–64 characters; passwords need at least 8 characters.
+3. A successful setup logs you in automatically. The password is stored only as a bcrypt hash in local `data/auth.json` (0600).
+4. Five consecutive wrong passwords lock the account for one hour; the login endpoint also has per-IP rate limiting.
+5. You can configure SMTP under Settings → Administrator account → Email sign-in verification and enable an email code as a second factor. The SMTP password is stored only in server-side `data/mail.json` (0600) and is never returned by the API. If SMTP breaks, run `npm run disable-2fa` in the install directory on the server to turn the second factor off locally.
+6. If you forget the password, run this in the install directory on the server:
+
+   ```bash
+   npm run set-password -- <username> <new-password>
+   systemctl --user restart claude-web   # use systemctl restart claude-web for a system service
+   ```
+
+   You can also change it after login under Settings → Administrator account.
+
+### Service management
 
 ```bash
 systemctl --user status claude-web
 journalctl --user -u claude-web -f
-# Source install: build and restart from a terminal/Claude Code window outside the service.
-# The script refuses to restart from a session hosted by the service itself.
+# Source install: build and restart from a terminal or Claude Code window outside the service
 ./scripts/restart-service.sh --build
 # Release install: check / roll back
 node ~/.local/share/claude-web/bin/claude-web-update.mjs check
 node ~/.local/share/claude-web/bin/claude-web-update.mjs rollback
 ```
 
-Uninstall (keep data):
+### Upgrade and uninstall
+
+For release installs, use Settings → System update to check, install and roll back. The console asks for confirmation when sessions are running, and the service is briefly stopped during the update.
+
+Source installs can be upgraded manually:
+
+```bash
+cd ~/.local/share/claude-web
+git pull --ff-only
+npm ci
+npm run build
+systemctl --user restart claude-web
+```
+
+Uninstall (data is kept by default):
 
 ```bash
 ./uninstall.sh
+./uninstall.sh --purge --yes   # also remove the install directory and data
 ```
 
-### Let an agent install it
+<details>
+<summary>Let an agent install it</summary>
 
 Give the following block to Claude Code or another terminal agent:
 
@@ -158,27 +194,136 @@ You are a Linux operations assistant. Install and verify Claude Code Web on this
 Acceptance: health returns ok, the service is active, port 8010 is listening, and the home page loads.
 ```
 
-## First login and account
+</details>
 
-1. Open `http://<device-IP>:8010`; the first visit shows "Initialize administrator".
-2. Choose a username (letters, digits, `.` `_` `@` `-`, 1–64 characters) and a password (at least 8 characters), then confirm.
-3. Successful creation logs you in automatically. The password is stored only as a bcrypt hash in local `data/auth.json` (0600) and is never committed to Git.
-4. Five consecutive wrong passwords lock the account for one hour; the login endpoint also has per-IP rate limiting.
-5. Configure the SMTP server (host/port/SSL/username/password/From address) and enable email codes under Settings → Administrator account → Email sign-in verification. The SMTP password is stored only in server-side `data/mail.json` (0600) and is never returned; `MAIL_ENV_FILE` remains a fallback. After enabling, sign-in needs the password plus an email code. If SMTP breaks, run `npm run disable-2fa` on the server to disable it locally.
-6. Forgot your password? On the server, run:
-   ```bash
-   npm run set-password -- <username> <new-password>
-   systemctl --user restart claude-web   # use systemctl restart claude-web for a system service
-   ```
-   Or change it after login under Settings → Administrator account.
-7. If you see the login page immediately, the instance is already initialized; reset the password with the previous step if you do not know it.
+## Configuration
 
-The default appearance (login page and new browsers) can be set to system/light/dark under Settings → Appearance; the current browser can still switch independently from the sidebar footer.
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8010` | Listen port |
+| `HOST` | `0.0.0.0` | Listen address |
+| `DATA_DIR` | `./data` | Account, session index, transcripts, attachments and voice config |
+| `MAX_ATTACHMENTS` | `5` | Maximum attachments per message |
+| `MAX_ATTACHMENT_MB` | `10` | Maximum size per attachment in MB; base64 adds roughly 1/3 |
+| `MAX_TOTAL_ATTACHMENT_MB` | `20` | Total attachment size per message |
+| `ALLOWED_ROOTS` | User home | Roots allowed as workspaces, comma-separated |
+| `DEFAULT_WORKSPACE` | First allowed root | Default directory for new sessions (must be allowed) |
+| `DEFAULT_PERMISSION_MODE` | `default` | Default permission mode for new sessions; personal trusted machines may use `bypassPermissions` |
+| `DEFAULT_THEME` | `system` | Default appearance for the login page and new browsers: `system` / `dark` / `light` |
+| `SESSION_IDLE_MINUTES` | `30` | Idle minutes before the background CLI sleeps; sending again resumes it |
+| `PERMISSION_TIMEOUT_MINUTES` | `30` | Automatically deny approvals after this timeout |
+| `LOGIN_MAX_ATTEMPTS` | `8` | Maximum login attempts per rate-limit window |
+| `LOGIN_WINDOW_MINUTES` | `10` | Login rate-limit window in minutes |
+| `ACCOUNT_LOCK_ATTEMPTS` | `5` | Consecutive failure threshold for account lockout |
+| `ACCOUNT_LOCK_MINUTES` | `60` | Lockout duration in minutes |
+| `SESSION_DAYS` | `7` | Login cookie lifetime in days |
+| `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`; use `always` for public HTTPS |
+| `CLAUDE_BIN` | `claude` on `PATH` | Absolute path to the CLI (recommended for systemd) |
+| `TRUST_PROXY` | `true` | Read the real client IP behind a reverse proxy |
+| `MAIL_ENV_FILE` | `./data/mail.env` | SMTP credential fallback; `data/mail.json` saved from Settings takes precedence. Both files should be 0600 |
+| `VOICE_PROXY_URL` | empty | Optional HTTP egress proxy for voice requests; direct when unset |
+| `GEMINI_LIVE_URL` | empty | Gemini Live WebSocket relay URL (requires a Google-supported region) |
+| `GEMINI_LIVE_PROXY_TOKEN` | empty | Internal auth token for the Live relay (optional, server-side only) |
+| `GEMINI_LIVE_MODEL` | `gemini-3.5-transcribe-live` | Live model |
+| `LOG_LEVEL` | `info` | Server log level |
 
-### Manual run (development)
+Workspaces can be extended under Settings → Workspace directories, where you can add extra directories and choose the default; new sessions can also create folders directly. See [`.env.example`](.env.example) for the full list.
+
+`bypassPermissions` is not passed to the CLI directly: because the CLI refuses `--dangerously-skip-permissions` as root, the console starts in `default` mode and approves requests from `canUseTool`. Tool calls are still recorded.
+
+### Voice input
+
+Choose a provider and enter its key under Settings → Voice, then save and make it current. Configuration is shared by desktop and mobile, and the mic button in the composer starts or stops dictation directly. Keys are written only to server-side `data/voice.json` (0600), and the page shows a mask.
+
+- **Google Gemini**: default model `gemini-3.5-transcribe`. Direct access is rejected in some regions; enable "access through relay" and enter the HTTPS relay root URL and auth header.
+- **OpenAI-compatible**: presets for OpenAI, Groq, SiliconFlow and local faster-whisper; works with any service exposing `/v1/audio/transcriptions`.
+- **Volcengine**: enter App ID, Access Key and Resource ID. For whole-utterance transcription the server converts browser audio to 16 kHz PCM with `ffmpeg`, then uses the WebSocket recognizer.
+- **Browser built-in**: uses `SpeechRecognition`, needs no key, and depends on browser support.
+
+Real-time streaming (write while speaking) is available for all three server-side providers:
+
+- **Gemini Live** needs a WebSocket relay that can reach Google (this project does not ship one). Set the relay URL and internal token in Settings or through environment variables.
+- **OpenAI-compatible** in "auto" mode uses the Realtime WebSocket for official OpenAI and segmented live transcription for other services; you can also force either mode.
+- **Volcengine** connects directly to its streaming WebSocket and sends 16 kHz PCM without `ffmpeg`.
+
+If real-time recognition fails or is not configured, it falls back to whole-utterance transcription. Browser microphones work only on HTTPS or `localhost`, so use HTTPS for public deployments. See [Voice recognition](docs/VOICE-ASR.md) for provider details and limitations.
+
+### Attachments
+
+The composer supports three ways to attach files: the Attach button, pasting images or files, and dragging files into the chat page. Files upload to `data/attachments/<sessionId>/` on the server, and messages reference attachment ids. The server validates ownership and size, then converts attachments into model-consumable content:
+
+- Images (PNG/JPEG/GIF/WebP) → Anthropic `image` content blocks;
+- Small text files (≤64 KB, 128 KB total inline budget per message) → inlined into `text` blocks;
+- Other files → an absolute path in the message, which Claude reads on demand with the Read tool.
+
+Transcripts store only `id/name/mimeType/size/kind`, never file bytes. Limits are 5 attachments per message, 10 MB per file and 20 MB total by default, all configurable through environment variables. Images replay through random capability URLs; non-image downloads still require a signed-in session. See [Attachment pipeline](docs/ATTACHMENTS.md) for the full flow and security boundaries.
+
+Images returned by tools (for example `Read` on a PNG) use a separate pipeline: the bytes live under `data/tool-images`, the transcript keeps only a descriptor, and tool cards render thumbnails with an in-page lightbox. See [Tool-result images, text preview and in-turn append](docs/TOOL-IMAGES.md).
+
+### Native Web commands
+
+The CLI's `/model` usually returns synthetic text in a terminal. The Web console turns these system configuration commands into native UI:
+
+| Command | Web behavior |
+|---|---|
+| `/model` | Opens the model panel: current model, common presets and a custom model ID |
+| `/model <name>` | Switches the model directly; `/model default` restores the default |
+| `/context` | Opens the status panel and refreshes context usage |
+| `/usage` / `/status` | Shows session state, model, permissions, directory, cost and context |
+| `/permissions` | Opens the permission-mode picker |
+| `/mcp` / `/agents` / `/list-agents` | Opens the extensions panel: MCP status, tools, errors, reconnect and enable/disable; read-only subagent list |
+| `/config` | Opens Web session settings |
+| `/help` | Opens Web command help |
+
+These commands are not sent to the CLI and do not produce `<synthetic>` conversation turns. Other `/commands` and skills continue to the Claude Code CLI; `<synthetic>` system messages render as system notices.
+
+The MCP panel only reads the current session's status and performs session-scoped enable/disable and reconnect. It does not send MCP env, headers or command paths to the browser, and never edits config files. The plugin marketplace, `/reload-plugins` and hooks management remain CLI-managed; see [Extension management scope](docs/EXTENSIONS.md) for the rationale.
+
+## How it works
+
+- Each Web session has a server-side `ClaudeRuntime` that holds the CLI process through the Agent SDK's streaming `query()`. The browser only subscribes to events and never owns the process.
+- Events are appended to `data/transcripts/<sessionId>.jsonl`. On attach, the WebSocket sends a snapshot and replays everything after `lastSeq`, so a refresh does not lose state.
+- Permission approvals suspend inside the SDK's `canUseTool` callback. The UI shows the command or file diff and returns the user's choice.
+- The frontend is a Vue 3 single-page app that consumes normalized events; Markdown, tool cards, diffs and panels are rendered there.
+
+For the full design and trade-offs, see [Architecture and invariants](docs/ARCHITECTURE.md) and [Core implementation](docs/IMPLEMENTATION.md).
+
+## Security
+
+This console is equivalent to a **remote terminal for the service user**. Anyone who can sign in can execute commands and modify files with that user's permissions.
+
+- Never expose port 8010 directly to the public internet. Use a reverse proxy, HTTPS and an identity gateway, with the in-app login as a second layer.
+- The default permission mode (`default`) is the safest. `bypassPermissions` executes tools immediately; use it only on a personal trusted machine.
+- Accounts, SMTP settings, voice keys and transcripts all live under the server-side `data/` directory, with sensitive files at 0600. Treat it as sensitive data when backing up, migrating or sharing an environment.
+- For production, run as a dedicated user and add only the project directories you need to `ALLOWED_ROOTS`.
+- Report security issues through the private channel described in the [security policy](SECURITY.md); do not open a public issue.
+
+## FAQ
+
+**Does closing the browser stop a task?**
+
+No. The session process runs on the server and the WebSocket only attaches to it. Reopening the page restores state from the event log; normally, only a service restart, an explicit stop or an unexpected CLI exit interrupts the current turn.
+
+**Can I use it from my phone or over the internet?**
+
+On a local network, open it directly in a mobile browser. Public access needs your own HTTPS reverse proxy, ideally with an additional identity gateway. Browser microphones work only on HTTPS or `localhost`.
+
+**How does this relate to the VS Code extension?**
+
+Both use the local `claude` CLI and the sessions under `~/.claude/projects`. The Web console can scan and resume sessions created by the extension or terminal, but it is not a replacement for the extension and does not reuse its UI code.
+
+**Where is data stored, and how do I back it up?**
+
+Release installs and `install.sh --from-dir` use `~/.local/share/claude-web/data` by default; running `npm start` manually uses `data/` in the project. The directory holds accounts, sessions, attachments and voice configuration. Back up `data/`; upgrades do not overwrite it.
+
+**Why no built-in terminal, file tree or multi-agent orchestration?**
+
+The project is a structured session console, not a browser IDE. Those capabilities either enlarge the attack surface significantly or make the product much heavier, so they remain roadmap items to evaluate when needed. See the [Roadmap](docs/ROADMAP.md).
+
+## Development
 
 ```bash
-npm install
+npm ci
 npm run build
 DATA_DIR=./data PORT=8010 node dist/server/index.js
 ```
@@ -190,143 +335,48 @@ npm run dev:server   # Fastify, :8010
 npm run dev:web      # Vite, :5173, proxies /api and /ws
 ```
 
----
-
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8010` | Listen port |
-| `HOST` | `0.0.0.0` | Listen address |
-| `DATA_DIR` | `./data` | Account, session index, transcripts, attachments, voice config |
-| `MAX_ATTACHMENTS` | `5` | Maximum attachments per message |
-| `MAX_ATTACHMENT_MB` | `10` | Maximum size per attachment in MB; base64 adds roughly 1/3 |
-| `MAX_TOTAL_ATTACHMENT_MB` | `20` | Total attachment size per message |
-| `ALLOWED_ROOTS` | User home | Roots allowed as workspaces, comma-separated |
-| `DEFAULT_WORKSPACE` | First allowed root | Default directory for new sessions (must be allowed) |
-| `DEFAULT_PERMISSION_MODE` | `default` | Default permission mode for new sessions; personal trusted machines may use `bypassPermissions` |
-| `DEFAULT_THEME` | `system` | Default appearance for the login page and new browsers: `system` / `dark` / `light`; also editable in Settings |
-| `SESSION_IDLE_MINUTES` | `30` | Idle minutes before the background CLI sleeps; sending again resumes it |
-| `PERMISSION_TIMEOUT_MINUTES` | `30` | Automatically deny approvals after this timeout |
-| `ACCOUNT_LOCK_ATTEMPTS` | `5` | Consecutive failure threshold for account lockout |
-| `ACCOUNT_LOCK_MINUTES` | `60` | Lockout duration in minutes |
-| `CLAUDE_BIN` | `claude` on `PATH` | Absolute path to the CLI (recommended for systemd) |
-| `TRUST_PROXY` | `true` | Read the real client IP behind a reverse proxy |
-| `MAIL_ENV_FILE` | `./data/mail.env` | SMTP credential fallback (`SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM/MAIL_TO`); `data/mail.json` saved from Settings takes precedence. Keep both 0600 |
-| `SESSION_DAYS` | `7` | Login cookie lifetime in days; shorten it when email verification is enabled |
-| `COOKIE_SECURE` | `auto` | `auto` / `always` / `never`; use `always` for public HTTPS |
-| `VOICE_PROXY_URL` | empty | Optional HTTP egress proxy for voice requests (local proxy or corporate gateway); direct when unset |
-| `GEMINI_LIVE_URL` | empty | Gemini Live WebSocket relay URL (requires a Google-supported region) |
-| `GEMINI_LIVE_PROXY_TOKEN` | empty | Internal auth token for the Live relay (optional, server-side only) |
-| `GEMINI_LIVE_MODEL` | `gemini-3.5-transcribe-live` | Live model |
-
-Workspaces can be extended under Settings → Workspace directories, where you can add extra directories and choose the default; new sessions can also create folders directly.
-
-### Voice recognition
-
-Choose a provider and enter its key under Settings → Voice, then save and make it current. Configuration is shared by desktop and mobile; afterwards the mic button in the chat composer starts/stops dictation directly without opening a provider picker or settings panel. Keys are written only to `data/voice.json` (0600) and the page shows a mask.
-
-- **Google Gemini**: default model `gemini-3.5-transcribe`. Direct access is rejected by Google in some regions; enable "access through relay" and enter the HTTPS relay root URL and its auth header.
-- **OpenAI-compatible**: presets for OpenAI, Groq, SiliconFlow and local faster-whisper; works with any service exposing `/v1/audio/transcriptions`.
-- **Volcengine**: enter App ID / Access Key / Resource ID; for whole-utterance transcription the server uses `ffmpeg` to convert browser audio to 16 kHz PCM, then uses the WebSocket recognizer.
-- **Browser built-in**: uses `SpeechRecognition`, needs no key, and depends on browser support.
-
-Real-time streaming (write while speaking) is available for all three server-side providers:
-
-- **Gemini Live**: uses `gemini-3.5-transcribe-live` and needs a WebSocket relay in a Google-supported region (this project does not ship a relay; deploy a reverse proxy/Worker or use a host in a supported region). The relay URL and internal token can be set in Settings or via `GEMINI_LIVE_URL` / `GEMINI_LIVE_PROXY_TOKEN`.
-- **OpenAI-compatible**: in "auto" mode, official OpenAI uses the Realtime WebSocket and other compatible services use segmented live (call `/v1/audio/transcriptions` after a silence break and show one sentence at a time); you can also force Realtime or segmented. Custom Realtime gateways can use `wss://…/v1/realtime?intent=transcription` in Settings.
-- **Volcengine**: reuses App ID / Access Key / Resource ID and connects directly to the streaming WebSocket (`/api/v3/sauc/bigmodel`), with 16 kHz PCM and no ffmpeg.
-
-`VOICE_PROXY_URL` lets the server reach these voice services through a local proxy. If real-time recognition fails or is not configured, it falls back to whole-utterance transcription; after stopping dictation only the final transcript is applied, and late partials never rewrite the composer. The composer now places commands/files/voice and stop/send on one row; the running "Stop" is reachable from both the status strip and the composer, shows "Stopping…" immediately, and offers a force-stop escape hatch after 2.5 seconds.
-
-With no provider configured, clicking the mic only points you to Settings and does not request microphone permission. Whole-utterance mode starts/stops on click, uploads the recording, transcribes it and inserts the text at the caret; end-to-end latency depends on recording length and provider, typically 2–5 seconds for short phrases. Browser microphones work only on HTTPS or `localhost`; use HTTPS for public deployments.
-
-### Attachments
-
-The composer supports three ways to attach files: the Attach button, pasting images/files, or dragging files into the chat page. Files are uploaded to `data/attachments/<sessionId>/` on the server, and messages reference only attachment ids; the server validates ownership and size, then converts attachments into model-consumable content:
-
-- Images (PNG/JPEG/GIF/WebP) → Anthropic `image` content blocks, visible to the model;
-- Small text files (≤64 KB, 128 KB total inline budget per message) → inlined into `text` blocks so the model can read them even if Read is denied;
-- Other files → the message includes an absolute path and Claude reads them on demand with the Read tool.
-
-Transcripts store only attachment `id/name/mimeType/size/kind`, never file bytes; after refresh, images replay through a public random capability URL (no login) while non-images still require the login cookie and are forced to download. Limits are 5 attachments per message, 10 MB per file and 20 MB total by default, all configurable through environment variables. See [Attachment pipeline](docs/ATTACHMENTS.md) for the full flow, storage format, security boundaries and limits.
-
-Images returned by tools (for example `Read` on a PNG) use a separate authenticated pipeline: the bytes are stored under `data/tool-images`, the transcript keeps only an image descriptor, and the tool card renders thumbnails with an in-page lightbox. See [Tool-result images, text preview and in-turn append](docs/TOOL-IMAGES.md).
-
-### Native Web commands
-
-The CLI's `/model` usually returns synthetic text such as `Current model: … Available: …` in a terminal; the Web console turns these system configuration commands into native UI:
-
-| Command | Web behavior |
-|---|---|
-| `/model` | Opens the model panel: current model, Sonnet/Opus/Haiku/Fable/Best/1M/Opus Plan presets and a custom model ID |
-| `/model <name>` | Switches the model directly; `/model default` restores the default |
-| `/context` | Opens the status panel and refreshes context usage (total, percentage, categories) |
-| `/usage` / `/status` | Shows session state, model, permissions, directory, cost and context |
-| `/permissions` | Opens the permission-mode picker |
-| `/mcp` / `/agents` / `/list-agents` | Opens the extensions panel: MCP status/tools/errors, reconnect/enable/disable; read-only subagent list |
-| `/config` | Opens Web session settings (model/permissions/extensions/status) |
-| `/help` | Opens Web command help |
-
-These commands are not sent to the CLI and do not produce `<synthetic>` conversation turns. Typing a complete command name and pressing Enter executes it; typing only a prefix still completes from the menu. Other `/commands` and skills continue to the Claude Code CLI; `<synthetic>` system messages returned by the CLI render as system notices instead of pretending to be Claude replies.
-
-The MCP panel only reads the current session's status and performs session-scoped enable/disable/reconnect; it does not send MCP env, headers or command paths, and never edits config files. Authentication or adding servers still happens through `/mcp` in a terminal. The plugin marketplace, `/reload-plugins` and hooks management are deliberately kept out of the Web UI; see [Extension management scope](docs/EXTENSIONS.md) for the rationale.
-
----
-
-## Security
-
-This console is equivalent to a **remote terminal for the service user**:
-
-- Never expose port 8010 directly to the public internet without authentication. Prefer a VPS reverse proxy + HTTPS + an identity gateway, with the in-app login as a second layer.
-- The default `default` permission mode is safest; `bypassPermissions` executes tools immediately and should only be used on a personal trusted machine.
-- Accounts, voice keys and transcripts all live under `data/`, which is in `.gitignore`; never commit them.
-- If you forget the password, run `npm run set-password -- <username> <new-password>` on the server.
-- For production, run as a dedicated user and add only the project directories you need to the workspace.
-
----
-
-## Directory layout
-
-```text
-server/src        Fastify + Agent SDK + session runtime
-web/src           Vue 3 SPA (login/sessions/chat/settings)
-scripts           Password reset, upstream version check, release packaging, standalone updater
-deploy            systemd / nginx templates, update signing public key
-docs              Architecture, feature parity, voice, research, release strategy, system updates
-install.sh        Clean user-level/system-level install (--release / --from-dir)
-uninstall.sh      Uninstall
-```
-
-## Testing
+Other checks:
 
 ```bash
-npm run build:server
-npm run build:web
-node scripts/check-upstream.mjs
-# After the service starts
+node scripts/check-upstream.mjs    # local CLI / SDK / VS Code extension versions
+npm run check-secrets              # scan for known secret patterns
 curl -fsS http://127.0.0.1:8010/api/health
 ```
 
-Before publishing, at minimum run the builds above, the health check and one real session regression.
+`npm run build` must pass; there is currently no lint script or unit-test framework. Browser smoke tests are not included in this repository. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
+
+Directory layout:
+
+```text
+server/src    Fastify, Agent SDK host, session runtime, attachments and voice
+web/src       Vue 3 single-page app (login, sessions, chat, settings)
+scripts       Password reset, upstream version check, release packaging, standalone updater
+deploy        systemd / nginx templates, update signing public key
+docs          Architecture, implementation, deployment, voice, attachments, extensions
+```
 
 ## Documentation
 
+- [English documentation index](docs/README.en.md) / [中文文档索引](docs/README.md)
 - [Architecture and invariants](docs/ARCHITECTURE.md) (Chinese)
 - [Core implementation notes](docs/IMPLEMENTATION.md) (Chinese)
 - [Deployment guide (manual / agent)](docs/DEPLOYMENT.md) (Chinese)
 - [Release packaging and system updates](docs/UPDATER.md) (Chinese)
-- [Roadmap](docs/ROADMAP.md) (Chinese)
-- [VS Code extension feature parity](docs/FEATURE-PARITY.md) (Chinese)
-- [Voice provider research and configuration](docs/VOICE-ASR.md) (Chinese)
-- [Chinese/English UI (i18n)](docs/I18N.md) (Chinese)
-- [Attachment pipeline: Web upload to Claude Code](docs/ATTACHMENTS.md) (Chinese)
-- [Tool-result images, text preview and in-turn append](docs/TOOL-IMAGES.md) (Chinese)
+- [Voice recognition](docs/VOICE-ASR.md) (Chinese)
+- [Attachment pipeline](docs/ATTACHMENTS.md) (Chinese)
 - [MCP / subagents / plugins: Web management scope](docs/EXTENSIONS.md) (Chinese)
-- [Competitive research and trade-offs](docs/COMPETITIVE-RESEARCH.md) (Chinese)
-- [UI layout and interaction decisions](docs/UI-DESIGN.md) (Chinese)
-- [English documentation index and design summaries](docs/README.en.md)
+- [VS Code extension feature parity](docs/FEATURE-PARITY.md) (Chinese)
+
+The entry documents are fully bilingual. Design documents use Chinese as the canonical text, with English summaries in the documentation index. See [docs/I18N.md](docs/I18N.md) for the rules.
+
+## Contributing
+
+Issues and pull requests are welcome. For bug reports, include the version, reproduction steps and your environment. For changes to the runtime, permissions or data formats, please open an issue first. Report security issues privately rather than in a public issue.
+
+## Disclaimer
+
+Claude Code Web is an independent open-source project and is not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.
 
 ## License
 
-MIT
+[MIT](LICENSE)

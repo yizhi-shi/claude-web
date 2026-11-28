@@ -1,74 +1,56 @@
-# Documentation (English)
+# Documentation
 
-[简体中文](../README.md#文档) | English
+English | [简体中文](README.md)
 
-This is the English entry point for the project documentation. The detailed design documents are maintained in Chinese as the single source of truth; the summaries below explain what each one covers and link to the canonical page.
+This page is the English index for the project documentation. The entry documents are fully bilingual; the design documents use Chinese as the canonical text, and the summaries below explain what each one covers.
 
-For full bilingual user-facing documents, see:
+## Entry documents
 
-| Document | Chinese | English |
-|---|---|---|
-| Project overview, install, configuration | [README.md](../README.md) | [README.en.md](../README.en.md) |
-| Security policy | [SECURITY.zh-CN.md](../SECURITY.zh-CN.md) | [SECURITY.md](../SECURITY.md) |
-| Contributing | [CONTRIBUTING.zh-CN.md](../CONTRIBUTING.zh-CN.md) | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Document | Contents |
+|---|---|
+| [README](../README.en.md) | Project overview, features, installation, configuration, FAQ |
+| [SECURITY](../SECURITY.md) | Threat model, vulnerability reporting, deployment requirements and built-in protections |
+| [CONTRIBUTING](../CONTRIBUTING.md) | Development setup, pre-PR checks, code and documentation conventions |
 
-## Design documents
+## Design and implementation
 
-### [Architecture and invariants](ARCHITECTURE.md) (Chinese)
+| Document | Contents |
+|---|---|
+| [Architecture and invariants](ARCHITECTURE.md) | How the browser, Fastify, `ClaudeRuntime` and the CLI divide the work; event model, session lifecycle and the invariants that must hold |
+| [Core implementation](IMPLEMENTATION.md) | Why the Agent SDK, where commands and skills come from, event normalization, history resume, side questions and common traps |
+| [Attachment pipeline](ATTACHMENTS.md) | The full path from browser upload to Claude Code, storage format, limits and security boundaries |
+| [Tool-result images and text preview](TOOL-IMAGES.md) | Image storage and authentication, the in-page lightbox, plain-text tool output, and how in-turn messages are confirmed and recovered |
+| [Extension management scope](EXTENSIONS.md) | Why the Web UI manages MCP status/reconnect/enable and a read-only subagent list, but not the plugin marketplace, hooks or MCP editing |
+| [Deployment guide](DEPLOYMENT.md) | Manual and agent-assisted installation, first login, service management, reverse proxying, voice and attachment storage, troubleshooting |
+| [Release packaging and updates](UPDATER.md) | Release bundles, Ed25519 signing, version directories and the `current` symlink, the standalone updater and rollback |
+| [Voice recognition](VOICE-ASR.md) | Gemini, Gemini Live, OpenAI Realtime, OpenAI segmented live, Volcengine and browser recognition, with implementation notes and trade-offs |
+| [Chinese/English UI](I18N.md) | The `t()` dictionary, language selection and persistence, server-error translation and the bilingual documentation policy |
+| [UI design and interaction](UI-DESIGN.md) | Visual direction, desktop/mobile layout, component responsibilities, panels, composer, settings and accessibility |
+| [VS Code extension feature parity](FEATURE-PARITY.md) | Capability comparison with the VS Code Claude Code extension and the regression checklist after CLI/SDK upgrades |
 
-Explains the core split: the browser only renders and captures input, while the session process, event log and approval state live on the server. Includes the component map, session lifecycle, event model, permission modes, the invariants that must not be broken, and the voice/attachment/update/security boundaries.
+## Project and planning
 
-### [Core implementation](IMPLEMENTATION.md) (Chinese)
+| Document | Contents |
+|---|---|
+| [Roadmap](ROADMAP.md) | What is already available, known limitations, next priorities and product principles |
+| [Competitive research](COMPETITIVE-RESEARCH.md) | Observations from claudecodeui, opcode, Kanna, claude-run and similar projects, plus the trade-offs this project accepts |
 
-A host application for the official Claude Code Agent SDK plus a browser view layer. Covers why the SDK was chosen over PTY/xterm, where slash commands and skills come from, how the composer hooks into the SDK, why closing the page does not stop work, how `canUseTool` approvals are resolved, where file diffs come from, event normalization, history resume, and the most common traps.
+## Find a document by task
 
-### [Attachment pipeline](ATTACHMENTS.md) (Chinese)
+| I want to… | Start with |
+|---|---|
+| Install on a Linux machine | [README quick start](../README.en.md#quick-start) or the [deployment guide](DEPLOYMENT.md) |
+| Understand why closing the browser does not stop a task | [Architecture and invariants](ARCHITECTURE.md), [Core implementation](IMPLEMENTATION.md) |
+| Configure voice input | [README voice input](../README.en.md#voice-input), [Voice recognition](VOICE-ASR.md) |
+| Change attachment or tool-image behavior | [Attachment pipeline](ATTACHMENTS.md), [Tool-result images](TOOL-IMAGES.md) |
+| Add a native Web command | [Core implementation](IMPLEMENTATION.md), [UI design](UI-DESIGN.md) |
+| Publish a release or debug an update | [Release packaging and updates](UPDATER.md) |
+| Catch up with a new Claude Code release | [VS Code extension feature parity](FEATURE-PARITY.md) |
+| Change UI copy or add a language | [Chinese/English UI](I18N.md), [Contributing](../CONTRIBUTING.md) |
 
-End-to-end flow from browser upload to Claude Code: attachment button/paste/drag → upload API → `data/attachments/<sessionId>/` → message references attachment ids → `AttachmentStore.resolve()` → image blocks / inlined text / absolute paths → history replay. Also documents limits, storage format, path-traversal and XSS mitigations, and known gaps.
+## Keeping the docs consistent
 
-### [Tool-result images, text preview and in-turn append](TOOL-IMAGES.md) (Chinese)
-
-How image blocks returned inside tool results are stored under `data/tool-images` (0600) with only a descriptor in the transcript, served through an authenticated session-scoped endpoint, and rendered as a thumbnail plus in-page lightbox; how full tool text opens as plain text in a new tab; and how messages sent during a running turn are appended, confirmed by the CLI uuid, and re-sent after a service-shutdown failure.
-
-### [Extension management scope](EXTENSIONS.md) (Chinese)
-
-Why the Web UI manages MCP status, reconnect and session-scoped enable/disable, and shows subagents read-only, while deliberately skipping plugin marketplace/install, hooks editing, and MCP add/edit/auth. Includes the decision matrix, APIs, security allowlist and verification; a stale server that lacks the extensions route is reported as a restart hint instead of "session not running".
-
-### [Deployment guide](DEPLOYMENT.md) (Chinese)
-
-Manual and agent-assisted installation: prerequisites, release vs source install, first login, service management, upgrades and rollback, reverse proxy/HTTPS, voice and attachment storage, uninstall, troubleshooting and security recommendations.
-
-### [Release packaging and system updates](UPDATER.md) (Chinese)
-
-Immutable release tarballs, platform-specific bundles, Ed25519-signed `latest.json`, release layout (`releases/<version>` + `current` symlink), the standalone systemd updater, the Settings update button, staging preflight/health checks, rollback, install/update environment variables, and the smoke tests. Updates never overwrite the running process; production `git pull` and flat in-place updates are explicitly not the supported path.
-
-### [Voice recognition](VOICE-ASR.md) (Chinese)
-
-Provider research and implementation for whole-utterance transcription and real-time streaming: Gemini, Gemini Live, OpenAI Realtime, OpenAI-compatible segmented live, Volcengine streaming, and browser SpeechRecognition. Covers sampling rates, partial/final semantics, stop/failure handling, measured latency, data handling and how to add a provider.
-
-### [UI design and interaction decisions](UI-DESIGN.md) (Chinese)
-
-Visual direction, desktop/mobile layout, component responsibilities, dialog panels, composer/stop interactions, native Web commands and session settings, the grouped Settings layout (account/appearance, full-width sign-in security with SMTP disclosure, paired workspace/runtime, full-width system update, voice provider tabs), tool-result image thumbnails/lightbox and new-tab text preview, diff/code readability, the language switch, and accessibility details.
-
-### [VS Code extension feature parity](FEATURE-PARITY.md) (Chinese)
-
-Capability-by-capability comparison with the VS Code Claude Code extension, plus the upstream follow-up process and regression checklist used after CLI/SDK/extension upgrades.
-
-### [Roadmap](ROADMAP.md) (Chinese)
-
-What is already available, known limitations, next priorities and product principles. Includes release packaging/system updates, the lack of quota/cleanup for attachment and tool-image storage, and the bounded shutdown-recovery window for appended messages. Checkpoints/rewind, file tree/editor, Git panel and multi-agent orchestration are intentionally deferred.
-
-### [Competitive research](COMPETITIVE-RESEARCH.md) (Chinese)
-
-Survey of comparable open-source projects (claudecodeui, opcode, Kanna, claude-run, etc.), the core requirements extracted from them, layout conclusions, and what this project deliberately does not build.
-
-### [Chinese/English UI (i18n)](I18N.md) (Chinese)
-
-How the built-in Chinese/English switching works: coverage, language detection and persistence, the `t()` dictionary, server-error mapping, copy maintenance rules, limitations, and the bilingual documentation policy.
-
-## Keeping translations in sync
-
-- User-facing UI strings must update both the Chinese source string and the `EN` dictionary in `web/src/i18n.ts`.
-- The three fully bilingual entry documents must be changed as a pair; the language switch at the top of each file makes the counterpart explicit.
-- Design documents use Chinese as the canonical text. When a design document changes, update its summary on this page in the same change.
-- The policy is also recorded in [CONTRIBUTING.md](../CONTRIBUTING.md) and [I18N.md](I18N.md).
+- One home for each fact: architecture, implementation, deployment and update details belong in their design document; the README stays an overview and index.
+- When a design document changes, update its entry in this page and in the [Chinese index](README.md). New documents must be added to both indexes.
+- Entry documents are maintained as pairs; change the Chinese and English sides together.
+- Commands, defaults and paths in the docs should match the code. When behavior changes, fix the relevant document in the same change rather than leaving it for later.

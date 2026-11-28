@@ -229,7 +229,7 @@ POST /api/sessions/:id/messages
 - 图片 MIME 白名单；SVG 不作为图片；
 - 非图片强制下载，配合 `X-Content-Type-Options: nosniff`、CSP `img-src 'self' data: blob:`，降低同源 HTML/SVG 执行风险；
 - `Content-Disposition` 对文件名做 RFC 6266 兼容处理，避免引号/换行注入；
-- 目录 `0700`、文件 `0600`；`data/` 不进 Git；
+- 目录 `0700`、文件 `0600`；`data/` 属于本地运行数据，备份和迁移时请按敏感数据保护；
 - 上传接口没有单独的病毒扫描或内容审核；附件内容会进入模型上下文，按不可信输入处理。
 
 ## 7. 与其他功能的关系

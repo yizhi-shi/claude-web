@@ -4,6 +4,8 @@ about: Something is broken or behaves unexpectedly
 labels: bug
 ---
 
+> English or Chinese are both welcome.
+
 ## What happened
 
 ## Steps to reproduce

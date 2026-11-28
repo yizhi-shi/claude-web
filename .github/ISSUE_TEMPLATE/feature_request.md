@@ -4,6 +4,8 @@ about: Suggest a capability or UX improvement
 labels: enhancement
 ---
 
+> English or Chinese are both welcome.
+
 ## Problem
 
 <!-- What are you trying to do, and what is missing? -->

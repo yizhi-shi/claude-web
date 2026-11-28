@@ -100,10 +100,10 @@ data/
 
 ## 文档与发布
 
-- `docs/ARCHITECTURE.md`、`IMPLEMENTATION.md`、`ATTACHMENTS.md`、`VOICE-ASR.md`、`EXTENSIONS.md`、`I18N.md`、`UPDATER.md` 是专项事实源；改行为时同步对应文档和 `README.md` / `CHANGELOG.md`。
+- `docs/ARCHITECTURE.md`、`IMPLEMENTATION.md`、`ATTACHMENTS.md`、`VOICE-ASR.md`、`EXTENSIONS.md`、`I18N.md`、`UPDATER.md` 是专项事实源；改行为时同步对应文档和 `README.md` / `CHANGELOG.md`。文档索引入口是 `docs/README.md` 与 `docs/README.en.md`，新增、重命名或删除文档时同步更新两个索引。
 - **文档双语（强制）**：
   - 入口文档成对维护：`README.md` ↔ `README.en.md`、`SECURITY.md` ↔ `SECURITY.zh-CN.md`、`CONTRIBUTING.md` ↔ `CONTRIBUTING.zh-CN.md`；改一份必须同步另一份，并保留顶部语言切换。
-  - 设计文档以中文为事实源；修改 `docs/*.md` 时必须同步更新 `docs/README.en.md` 中对应的英文摘要；新增设计文档必须加摘要条目。
+  - 设计文档以中文为事实源；修改 `docs/*.md` 时必须同步更新 `docs/README.md` 和 `docs/README.en.md` 中对应的条目/摘要；新增设计文档必须同时加入两个索引。
   - UI 文案规则见上文：中文源串与 `web/src/i18n.ts` 的 `EN` 字典同时更新。
   - 完整策略与检查清单：`docs/I18N.md`。
 - 私有开发树如存在 `scripts/export-oss.sh` / `scripts/publish.sh`，发布必须走脚本，不要手工复制到公开仓库；公开树是脱敏导出。
